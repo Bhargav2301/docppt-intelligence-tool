@@ -3,3 +3,11 @@ uvicorn==0.29.0
 pydantic==2.7.1
 SQLAlchemy==2.0.30
 psycopg2-binary==2.9.9
+transformers==4.40.1
+torch==2.3.0
+sentence-transformers==2.7.0
+spacy==3.7.4
+nltk==3.8.1
+sumy==0.11.0
+scikit-learn==1.4.2
+networkx==3.2.1

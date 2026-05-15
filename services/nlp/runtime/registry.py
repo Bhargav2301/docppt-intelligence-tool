@@ -43,6 +43,19 @@ class ModelRegistry:
         return cls._cache[cache_key]
 
     @classmethod
+    def get_instruction_model(cls):
+        if cls._is_extractive_mode():
+            return None
+            
+        cache_key = f"instruction_{INSTRUCTION_MODEL}"
+        if cache_key not in cls._cache:
+            logger.info(f"Loading instruction model: {INSTRUCTION_MODEL}")
+            from transformers import pipeline
+            device = -1 if MODEL_MODE == "local_cpu" else 0
+            cls._cache[cache_key] = pipeline("text2text-generation", model=INSTRUCTION_MODEL, device=device)
+        return cls._cache[cache_key]
+
+    @classmethod
     def get_perplexity_model(cls):
         if cls._is_extractive_mode():
             return None

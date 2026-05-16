@@ -81,16 +81,9 @@ def create_session(session: SessionCreate, db: DBSession = Depends(get_db)):
     db.refresh(db_session)
     return db_session
 
-@router.get("/{session_id}", response_model=SessionResponse)
-def get_session(session_id: uuid.UUID, db: DBSession = Depends(get_db)):
-    db_session = db.query(Session).filter(Session.id == session_id).first()
-    if not db_session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return db_session
-
 @router.get("/{session_id}/detail")
 def get_session_detail(session_id: uuid.UUID, db: DBSession = Depends(get_db)):
-    """Return session metadata plus associated output (doc or ppt)."""
+    """Return session metadata plus its associated output (doc or ppt)."""
     db_session = db.query(Session).filter(Session.id == session_id).first()
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -102,11 +95,11 @@ def get_session_detail(session_id: uuid.UUID, db: DBSession = Depends(get_db)):
             "input_type": db_session.input_type,
             "input_label": db_session.input_label,
             "status": db_session.status,
-            "error_message": db_session.error_message,
             "created_at": db_session.created_at.isoformat() if db_session.created_at else None,
             "completed_at": db_session.completed_at.isoformat() if db_session.completed_at else None,
+            "error_message": db_session.error_message,
         },
-        "output": None
+        "output": None,
     }
 
     if db_session.session_type == "doc":
@@ -120,6 +113,13 @@ def get_session_detail(session_id: uuid.UUID, db: DBSession = Depends(get_db)):
             }
 
     return result
+
+@router.get("/{session_id}", response_model=SessionResponse)
+def get_session(session_id: uuid.UUID, db: DBSession = Depends(get_db)):
+    db_session = db.query(Session).filter(Session.id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return db_session
 
 @router.delete("/{session_id}")
 def delete_session(session_id: uuid.UUID, db: DBSession = Depends(get_db)):

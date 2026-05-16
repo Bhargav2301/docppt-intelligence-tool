@@ -95,10 +95,9 @@ export type RecentSessionItem = {
 };
 
 export type RequirementItem = {
-  id: string;
-  requirement: string;
+  text: string;
   priority: string;
-  confidence: number;
+  category: string;
 };
 
 export type DocProcessResponse = {
@@ -108,9 +107,27 @@ export type DocProcessResponse = {
     input_type: string;
     input_label: string;
     status: string;
-    error_message?: string | null;
     created_at: string;
+    completed_at: string;
+  };
+  output: {
+    structured_summary: string;
+    product_description: string;
+    implementation_requirements: Record<string, RequirementItem[]>;
+    word_count: number;
+  };
+};
+
+export type SessionDetailResponse = {
+  session: {
+    id: string;
+    session_type: string;
+    input_type: string;
+    input_label: string | null;
+    status: string;
+    created_at: string | null;
     completed_at: string | null;
+    error_message: string | null;
   };
   output: {
     structured_summary: string;
@@ -124,9 +141,9 @@ export const SessionAPI = {
   async getRecent(): Promise<RecentSessionItem[]> {
     return apiFetch<RecentSessionItem[]>("/api/sessions/recent");
   },
-  async getDetail(sessionId: string): Promise<DocProcessResponse> {
-    return apiFetch<DocProcessResponse>(`/api/sessions/${sessionId}/detail`);
-  }
+  async getDetail(sessionId: string): Promise<SessionDetailResponse> {
+    return apiFetch<SessionDetailResponse>(`/api/sessions/${sessionId}/detail`);
+  },
 };
 
 export const DocAPI = {

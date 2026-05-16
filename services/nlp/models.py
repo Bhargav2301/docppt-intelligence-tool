@@ -72,3 +72,46 @@ class File(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=text("now()"))
 
     session = relationship("Session", back_populates="files")
+
+class DocOutput(Base):
+    __tablename__ = "doc_outputs"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), unique=True)
+    structured_summary = Column(String)
+    product_description = Column(String)
+    implementation_requirements = Column(JSONB)
+    open_questions = Column(JSONB)
+    assumptions = Column(JSONB)
+    word_count = Column(Integer)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=text("now()"))
+
+    session = relationship("Session")
+
+class PptOutput(Base):
+    __tablename__ = "ppt_outputs"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), unique=True)
+    total_slides = Column(Integer)
+    total_flags = Column(Integer)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=text("now()"))
+
+    session = relationship("Session")
+    segments = relationship("PptSegment", back_populates="ppt_output", cascade="all, delete")
+
+class PptSegment(Base):
+    __tablename__ = "ppt_segments"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
+    ppt_output_id = Column(UUID(as_uuid=True), ForeignKey("ppt_outputs.id", ondelete="CASCADE"))
+    slide_index = Column(Integer, nullable=False)
+    shape_id = Column(String, nullable=False)
+    paragraph_index = Column(Integer, nullable=False)
+    run_index = Column(Integer, nullable=False)
+    original_text = Column(String, nullable=False)
+    normalized_text = Column(String)
+    flags = Column(JSONB)
+    eval_scores = Column(JSONB)
+    final_text = Column(String)
+    decision = Column(String, default="pending")
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=text("now()"))
+
+    ppt_output = relationship("PptOutput", back_populates="segments")

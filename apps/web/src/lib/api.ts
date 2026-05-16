@@ -73,3 +73,67 @@ export async function apiFetch<T>(
   // Handle JSON
   return response.json() as Promise<T>;
 }
+
+// ---------------------------------------------------------
+// Types & Methods
+// ---------------------------------------------------------
+
+export type RecentSessionItem = {
+  id: string;
+  session_type: string;
+  input_type: string;
+  input_label: string;
+  status: string;
+  created_at: string;
+  completed_at: string | null;
+  metrics: {
+    word_count?: number;
+    summary_ready?: boolean;
+    total_slides?: number;
+    total_flags?: number;
+  };
+};
+
+export type RequirementItem = {
+  id: string;
+  requirement: string;
+  priority: string;
+  confidence: number;
+};
+
+export type DocProcessResponse = {
+  session: {
+    id: string;
+    session_type: string;
+    input_type: string;
+    input_label: string;
+    status: string;
+    error_message?: string | null;
+    created_at: string;
+    completed_at: string | null;
+  };
+  output: {
+    structured_summary: string;
+    product_description: string;
+    implementation_requirements: Record<string, RequirementItem[]>;
+    word_count: number;
+  } | null;
+};
+
+export const SessionAPI = {
+  async getRecent(): Promise<RecentSessionItem[]> {
+    return apiFetch<RecentSessionItem[]>("/api/sessions/recent");
+  },
+  async getDetail(sessionId: string): Promise<DocProcessResponse> {
+    return apiFetch<DocProcessResponse>(`/api/sessions/${sessionId}/detail`);
+  }
+};
+
+export const DocAPI = {
+  async process(formData: FormData): Promise<DocProcessResponse> {
+    return apiFetch<DocProcessResponse>("/api/doc/process", {
+      method: "POST",
+      body: formData,
+    });
+  }
+};

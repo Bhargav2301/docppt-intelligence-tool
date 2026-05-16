@@ -14,3 +14,6 @@ LOCAL_MODEL_CACHE_DIR = os.getenv("LOCAL_MODEL_CACHE_DIR", "/root/.cache/hugging
 
 # Extractive configuration
 EXTRACTIVE_SUMMARY_SENTENCE_COUNT = 3
+
+# Evaluation Thresholds
+HALLUCINATION_SIMILARITY_THRESHOLD = float(os.getenv("HALLUCINATION_SIMILARITY_THRESHOLD", "0.75"))

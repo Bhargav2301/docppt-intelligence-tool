@@ -154,3 +154,94 @@ export const DocAPI = {
     });
   }
 };
+
+// ---------------------------------------------------------
+// PPT Types & Methods
+// ---------------------------------------------------------
+
+export type PptSegmentData = {
+  id: string;
+  slide_index: number;
+  shape_id: string;
+  paragraph_index: number;
+  run_index: number;
+  original_text: string;
+  normalized_text: string;
+  flags: Array<{
+    type: string;
+    severity: string;
+    explanation?: string;
+    matched_text?: string;
+    recommendation?: string;
+  }>;
+  eval_scores: { similarity?: number } | null;
+  final_text: string;
+  decision: string;
+};
+
+export type PptProcessResponse = {
+  session: {
+    id: string;
+    session_type: string;
+    input_label: string;
+    status: string;
+    created_at: string;
+    completed_at: string;
+  };
+  data: {
+    total_slides: number;
+    total_segments: number;
+    slides: Array<{
+      slide_index: number;
+      slide_number: number;
+      segments: PptSegmentData[];
+    }>;
+  };
+};
+
+export type PptSessionDetail = {
+  session: SessionDetailResponse["session"];
+  output: {
+    total_slides: number;
+    total_flags: number;
+    slides: Record<string, PptSegmentData[]>;
+  } | null;
+};
+
+export type CompileModification = {
+  slide_index: number;
+  shape_id: string;
+  paragraph_index: number;
+  run_index: number;
+  new_text: string;
+};
+
+export const PptAPI = {
+  async process(formData: FormData): Promise<PptProcessResponse> {
+    return apiFetch<PptProcessResponse>("/api/ppt/process", {
+      method: "POST",
+      body: formData,
+    });
+  },
+  async compileSession(
+    sessionId: string,
+    modifications: CompileModification[]
+  ): Promise<Blob> {
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    const form = new FormData();
+    form.append("modifications", JSON.stringify(modifications));
+
+    const res = await fetch(`${API_BASE}/api/ppt/compile_session/${sessionId}`, {
+      method: "POST",
+      body: form,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new ApiError(res.status, err.detail || "Compilation failed");
+    }
+
+    return res.blob();
+  },
+};
+

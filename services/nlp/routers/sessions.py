@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 from database import get_db
-from models import Session, User, DocOutput, PptOutput
+from models import Session, User, DocOutput, PptOutput, PptSegment
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -110,6 +110,35 @@ def get_session_detail(session_id: uuid.UUID, db: DBSession = Depends(get_db)):
                 "product_description": doc_out.product_description,
                 "implementation_requirements": doc_out.implementation_requirements,
                 "word_count": doc_out.word_count,
+            }
+
+    elif db_session.session_type == "ppt":
+        ppt_out = db.query(PptOutput).filter(PptOutput.session_id == db_session.id).first()
+        if ppt_out:
+            segments = db.query(PptSegment).filter(PptSegment.ppt_output_id == ppt_out.id).all()
+            # Group segments by slide_index
+            slides_map: dict = {}
+            for seg in segments:
+                si = seg.slide_index
+                if si not in slides_map:
+                    slides_map[si] = []
+                slides_map[si].append({
+                    "id": str(seg.id),
+                    "slide_index": seg.slide_index,
+                    "shape_id": seg.shape_id,
+                    "paragraph_index": seg.paragraph_index,
+                    "run_index": seg.run_index,
+                    "original_text": seg.original_text,
+                    "normalized_text": seg.normalized_text,
+                    "flags": seg.flags or [],
+                    "eval_scores": seg.eval_scores,
+                    "final_text": seg.final_text,
+                    "decision": seg.decision,
+                })
+            result["output"] = {
+                "total_slides": ppt_out.total_slides,
+                "total_flags": ppt_out.total_flags,
+                "slides": slides_map,
             }
 
     return result

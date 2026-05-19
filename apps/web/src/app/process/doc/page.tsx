@@ -35,10 +35,11 @@ export default function DocProcessor() {
   const router = useRouter();
   const [inputMethod, setInputMethod] = useState<InputMethod>("url");
   const [inputValue, setInputValue] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [step, setStep] = useState<ProcessingStep>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState<DocProcessResponse | null>(null);
+  const [batchResult, setBatchResult] = useState<any[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isProcessing = !["idle", "completed", "error"].includes(step);
@@ -47,15 +48,30 @@ export default function DocProcessor() {
     e.preventDefault();
     setErrorMessage("");
     setResult(null);
+    setBatchResult(null);
 
     const formData = new FormData();
+    let isBatch = false;
 
     if (inputMethod === "url") {
       if (!inputValue.trim()) return;
-      formData.append("url", inputValue.trim());
+      const urls = inputValue.trim().split("\n").map(u => u.trim()).filter(Boolean);
+      if (urls.length > 1) {
+        isBatch = true;
+        formData.append("urls", JSON.stringify(urls));
+      } else {
+        formData.append("url", urls[0]);
+      }
     } else if (inputMethod === "upload") {
-      if (!selectedFile) return;
-      formData.append("file", selectedFile);
+      if (selectedFiles.length === 0) return;
+      if (selectedFiles.length > 1) {
+        isBatch = true;
+        selectedFiles.forEach((file) => {
+          formData.append("files", file);
+        });
+      } else {
+        formData.append("file", selectedFiles[0]);
+      }
     } else {
       if (!inputValue.trim()) return;
       formData.append("text", inputValue.trim());
@@ -69,9 +85,15 @@ export default function DocProcessor() {
       await new Promise((r) => setTimeout(r, 200));
       setStep("analyzing");
 
-      const data = await DocAPI.process(formData);
-      setResult(data);
-      setStep("completed");
+      if (isBatch) {
+        const data = await DocAPI.batchProcess(formData);
+        setBatchResult(data);
+        setStep("completed");
+      } else {
+        const data = await DocAPI.process(formData);
+        setResult(data);
+        setStep("completed");
+      }
     } catch (err) {
       setStep("error");
       if (err instanceof ApiError) {
@@ -83,8 +105,10 @@ export default function DocProcessor() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setSelectedFile(file);
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setSelectedFiles(Array.from(files));
+    }
   };
 
   const handleExportJSON = () => {
@@ -133,7 +157,7 @@ export default function DocProcessor() {
         <h1 className="text-3xl font-bold tracking-tight">Analyze Document</h1>
         <p className="text-[var(--text-secondary)] mt-1">
           Extract structured requirements and product descriptions from Google
-          Docs or Word files.
+          Docs or Word files. Paste multiple Google Doc URLs (one per line) or upload multiple files to process in batch.
         </p>
       </div>
 
@@ -143,8 +167,8 @@ export default function DocProcessor() {
         <div className="flex border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
           {(
             [
-              { key: "url" as const, icon: LinkIcon, label: "Google Doc URL" },
-              { key: "upload" as const, icon: FileText, label: "Upload .docx" },
+              { key: "url" as const, icon: LinkIcon, label: "Google Doc URL(s)" },
+              { key: "upload" as const, icon: FileText, label: "Upload .docx File(s)" },
               { key: "paste" as const, icon: Type, label: "Paste Text" },
             ] as const
           ).map(({ key, icon: Icon, label }) => (
@@ -153,7 +177,7 @@ export default function DocProcessor() {
               onClick={() => {
                 setInputMethod(key);
                 setInputValue("");
-                setSelectedFile(null);
+                setSelectedFiles([]);
               }}
               className={`flex-1 py-3 text-sm font-medium transition-colors ${
                 inputMethod === key
@@ -173,15 +197,15 @@ export default function DocProcessor() {
           {inputMethod === "url" && (
             <div className="space-y-4">
               <label className="block text-sm font-medium text-[var(--text-primary)]">
-                Document URL
+                Document URL(s) <span className="text-xs text-[var(--text-muted)] font-normal">(Paste multiple, one per line, to batch process)</span>
               </label>
-              <input
-                type="url"
+              <textarea
+                rows={4}
                 required
-                placeholder="https://docs.google.com/document/d/..."
+                placeholder="https://docs.google.com/document/d/...&#10;https://docs.google.com/document/d/..."
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-md px-4 py-2 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
+                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-md px-4 py-2 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] font-mono text-sm leading-relaxed"
               />
             </div>
           )}
@@ -192,6 +216,7 @@ export default function DocProcessor() {
                 ref={fileInputRef}
                 type="file"
                 accept=".docx"
+                multiple
                 onChange={handleFileChange}
                 className="hidden"
               />
@@ -200,17 +225,24 @@ export default function DocProcessor() {
                 className="border-2 border-dashed border-[var(--border-subtle)] rounded-md p-12 text-center hover:border-[var(--accent)] transition-colors cursor-pointer"
               >
                 <FileText className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-3" />
-                {selectedFile ? (
-                  <p className="text-[var(--text-primary)] font-medium">
-                    {selectedFile.name}
-                  </p>
+                {selectedFiles.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-[var(--text-primary)] font-semibold">
+                      Selected {selectedFiles.length} file(s):
+                    </p>
+                    <div className="text-[var(--text-secondary)] text-sm max-h-32 overflow-y-auto space-y-1 max-w-md mx-auto px-4 py-2 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-md">
+                      {selectedFiles.map((f, i) => (
+                        <div key={i} className="truncate text-left">• {f.name}</div>
+                      ))}
+                    </div>
+                  </div>
                 ) : (
                   <>
                     <p className="text-[var(--text-primary)] font-medium">
-                      Click or drag to upload .docx
+                      Click or drag to upload .docx file(s)
                     </p>
                     <p className="text-[var(--text-secondary)] text-sm mt-1">
-                      Max file size: 10MB
+                      Max file size: 10MB • Multi-select supported
                     </p>
                   </>
                 )}
@@ -279,6 +311,78 @@ export default function DocProcessor() {
 
       {/* ───── Results ───── */}
       {result && <ResultsPanel result={result} onExportJSON={handleExportJSON} onExportMarkdown={handleExportMarkdown} />}
+
+      {/* ───── Batch Results Grid ───── */}
+      {batchResult && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center justify-between p-4 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-[var(--success)]" />
+              <div>
+                <span className="font-semibold text-[var(--text-primary)]">
+                  Batch Processing Complete
+                </span>
+                <span className="text-sm text-[var(--text-muted)] ml-3">
+                  Processed {batchResult.length} document(s)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {batchResult.map((item, idx) => (
+              <div 
+                key={idx} 
+                className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[var(--accent)] transition-all p-5 rounded-xl flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="w-5 h-5 text-[var(--accent)]" />
+                    <h3 className="font-semibold text-[var(--text-primary)] truncate max-w-[250px]">
+                      {item.input_label}
+                    </h3>
+                  </div>
+
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-[var(--text-muted)]">Status:</span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase ${
+                        item.status === "completed" 
+                          ? "bg-[var(--success)]/10 text-[var(--success)] border border-[var(--success)]/20" 
+                          : "bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/20"
+                      }`}>
+                        {item.status === "completed" ? "Success" : "Failed"}
+                      </span>
+                    </div>
+
+                    {item.word_count !== undefined && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-[var(--text-muted)]">Word Count:</span>
+                        <span className="text-[var(--text-primary)]">{item.word_count} words</span>
+                      </div>
+                    )}
+
+                    {item.error_message && (
+                      <div className="text-xs text-[var(--danger)] bg-[var(--danger)]/5 border border-[var(--danger)]/15 rounded p-2 mt-2 leading-relaxed">
+                        {item.error_message}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {item.status === "completed" && (
+                  <button
+                    onClick={() => router.push(`/session/${item.session_id}`)}
+                    className="w-full mt-2 text-center text-sm font-semibold text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] transition-colors py-2.5 rounded-lg"
+                  >
+                    View Analysis Details
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

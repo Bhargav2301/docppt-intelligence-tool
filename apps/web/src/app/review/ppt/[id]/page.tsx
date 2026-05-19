@@ -184,7 +184,7 @@ export default function PPTReview({
       <div className="max-w-4xl mx-auto mt-16 text-center space-y-4">
         <AlertCircle className="w-12 h-12 text-[var(--danger)] mx-auto" />
         <h2 className="text-xl font-semibold">Session Not Found</h2>
-        <p className="text-[var(--text-secondary)]">{error}</p>
+        <p className="text-[var(--text-secondary)]">{typeof error === "string" ? error : JSON.stringify(error)}</p>
         <Link
           href="/dashboard"
           className="inline-flex items-center gap-2 text-[var(--accent)] hover:underline"

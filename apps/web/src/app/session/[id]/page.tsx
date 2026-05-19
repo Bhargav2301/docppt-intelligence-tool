@@ -14,7 +14,7 @@ import {
   List,
   Loader2,
 } from "lucide-react";
-import { SessionAPI, SessionDetailResponse } from "@/lib/api";
+import { SessionAPI, SessionDetailResponse, ExportAPI } from "@/lib/api";
 
 export default function SessionDetail({
   params,
@@ -155,6 +155,20 @@ export default function SessionDetail({
             >
               <Download className="w-3.5 h-3.5" /> Markdown
             </button>
+            <a
+              href={ExportAPI.getPdfUrl(s.id)}
+              download
+              className="flex items-center gap-1.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--accent)] px-3 py-1.5 rounded-md border border-[var(--border-subtle)] hover:border-[var(--accent)] transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" /> PDF
+            </a>
+            <a
+              href={ExportAPI.getWordUrl(s.id)}
+              download
+              className="flex items-center gap-1.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--accent)] px-3 py-1.5 rounded-md border border-[var(--border-subtle)] hover:border-[var(--accent)] transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" /> Word
+            </a>
           </div>
         </div>
       ) : (

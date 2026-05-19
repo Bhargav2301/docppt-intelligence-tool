@@ -8,11 +8,13 @@ SQLALCHEMY_DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql://postgres:password@db:5432/docppt"
 )
 
-# For testing outside docker, this connection string is used when db hostname doesn't work.
+# For testing outside docker, use SQLite for local_dev to avoid Postgres auth issues
 if os.getenv("ENV") == "local_dev":
-    SQLALCHEMY_DATABASE_URL = "postgresql://postgres:password@localhost:5432/docppt"
+    SQLALCHEMY_DATABASE_URL = "sqlite:///./docppt.db"
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in SQLALCHEMY_DATABASE_URL else {}
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

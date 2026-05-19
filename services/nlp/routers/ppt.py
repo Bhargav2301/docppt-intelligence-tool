@@ -105,34 +105,35 @@ async def compile_session(session_id: str, modifications: str = Form(...), db: D
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/process")
-async def process_presentation(
-    file: UploadFile = File(...),
-    sensitivity: str = Form("conservative"),
-    db: DBSession = Depends(get_db)
-):
+from pydantic import BaseModel
+from typing import Optional
+
+class BatchPptItemResponse(BaseModel):
+    session_id: str
+    filename: str
+    status: str
+    total_slides: Optional[int] = 0
+    total_flags: Optional[int] = 0
+    error: Optional[str] = None
+
+async def process_single_ppt_internal(
+    file_bytes: bytes,
+    filename: str,
+    sensitivity: str,
+    db: DBSession
+) -> Dict[str, Any]:
     """
-    Full PPT processing pipeline:
-    1. Create session
-    2. Extract runs from .pptx
-    3. Detect artifacts per segment
-    4. Generate rewrites for flagged segments (if sensitivity allows)
-    5. Persist PptOutput + PptSegment rows
-    6. Return session + slide data for review UI
+    Internal helper that executes the E2E presentation humanization pipeline.
     """
-    if not file.filename.endswith(".pptx"):
-        raise HTTPException(status_code=400, detail="Only .pptx files are supported.")
-    
-    # 1. Create session
     user = db.query(User).filter(User.email == "local_user@example.com").first()
     if not user:
-        raise HTTPException(status_code=500, detail="Default local user not found.")
+        raise ValueError("Default local user not found.")
     
     db_session = Session(
         user_id=user.id,
         session_type="ppt",
         input_type="pptx",
-        input_label=file.filename,
+        input_label=filename,
         status="validating",
         processing_started_at=datetime.utcnow()
     )
@@ -144,8 +145,6 @@ async def process_presentation(
         # 2. Extract
         db_session.status = "extracting"
         db.commit()
-        
-        file_bytes = await file.read()
         
         # Save original .pptx to disk for later compilation
         pptx_path = os.path.join(PPT_UPLOAD_DIR, f"{db_session.id}.pptx")
@@ -202,7 +201,7 @@ async def process_presentation(
                 
                 # Balanced / Aggressive: attempt generative rewrite
                 try:
-                    rewritten = generate_rewrite(original, tone="professional")
+                    rewritten = generate_rewrite(original, tone="professional", db=db, session_id=db_session.id)
                     if not rewritten:
                         seg["final_text"] = original
                         seg["decision"] = "pending"
@@ -266,8 +265,21 @@ async def process_presentation(
                 db.add(db_seg)
         
         db.commit()
+
+        # Build File table logging for source .pptx
+        db_file = File(
+            session_id=db_session.id,
+            user_id=user.id,
+            file_role="source",
+            file_type="pptx",
+            storage_path=pptx_path,
+            original_filename=filename,
+            mime_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            size_bytes=len(file_bytes)
+        )
+        db.add(db_file)
+        db.commit()
         
-        # 6. Return
         return {
             "session": {
                 "id": str(db_session.id),
@@ -285,5 +297,83 @@ async def process_presentation(
         db_session.error_message = str(e)
         db_session.completed_at = datetime.utcnow()
         db.commit()
+        raise e
+
+@router.post("/process")
+async def process_presentation(
+    file: UploadFile = File(...),
+    sensitivity: str = Form("conservative"),
+    db: DBSession = Depends(get_db)
+):
+    """
+    Pipeline for a single presentation.
+    """
+    if not file.filename.endswith(".pptx"):
+        raise HTTPException(status_code=400, detail="Only .pptx files are supported.")
+    
+    try:
+        file_bytes = await file.read()
+        return await process_single_ppt_internal(
+            file_bytes=file_bytes,
+            filename=file.filename,
+            sensitivity=sensitivity,
+            db=db
+        )
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/batch-process", response_model=List[BatchPptItemResponse])
+async def batch_process_presentation(
+    files: List[UploadFile] = File(...),
+    sensitivity: str = Form("conservative"),
+    db: DBSession = Depends(get_db)
+):
+    """
+    Pipeline for processing multiple presentations in a batch.
+    Gracefully handles partial failures.
+    """
+    results = []
+    
+    for file in files:
+        if not file.filename.endswith(".pptx"):
+            results.append(BatchPptItemResponse(
+                session_id="",
+                filename=file.filename,
+                status="failed",
+                error="Only .pptx files are supported."
+            ))
+            continue
+            
+        try:
+            file_bytes = await file.read()
+            res = await process_single_ppt_internal(
+                file_bytes=file_bytes,
+                filename=file.filename,
+                sensitivity=sensitivity,
+                db=db
+            )
+            session_id = res["session"]["id"]
+            results.append(BatchPptItemResponse(
+                session_id=session_id,
+                filename=file.filename,
+                status="completed",
+                total_slides=res["data"].get("total_slides", 0),
+                total_flags=res["session"].get("total_flags", 0) # fallbacks to 0 if not set, or we can fetch total flags from the output
+            ))
+            # Let's dynamically fix total_flags by computing from res
+            results[-1].total_flags = sum(
+                len(seg.get("flags", [])) 
+                for slide in res["data"].get("slides", []) 
+                for seg in slide.get("segments", [])
+            )
+        except Exception as e:
+            logger.error(f"Failed processing batch item {file.filename}: {str(e)}")
+            results.append(BatchPptItemResponse(
+                session_id="",
+                filename=file.filename,
+                status="failed",
+                error=str(e)
+            ))
+            
+    return results
 

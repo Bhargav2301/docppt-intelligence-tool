@@ -28,6 +28,14 @@ export async function apiFetch<T>(
   // Default headers for JSON requests
   const headers = new Headers(options.headers || {});
   
+  // Inject authorization token if it exists in local storage
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("docppt_token");
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+  }
+  
   // If body is a string and no content-type is set, assume JSON
   // If body is FormData, do not set Content-Type (browser will set it with boundary)
   if (options.body && typeof options.body === "string" && !headers.has("Content-Type")) {
@@ -144,11 +152,22 @@ export const SessionAPI = {
   async getDetail(sessionId: string): Promise<SessionDetailResponse> {
     return apiFetch<SessionDetailResponse>(`/api/sessions/${sessionId}/detail`);
   },
+  async delete(sessionId: string): Promise<void> {
+    return apiFetch<void>(`/api/sessions/${sessionId}`, {
+      method: "DELETE",
+    });
+  },
 };
 
 export const DocAPI = {
   async process(formData: FormData): Promise<DocProcessResponse> {
     return apiFetch<DocProcessResponse>("/api/doc/process", {
+      method: "POST",
+      body: formData,
+    });
+  },
+  async batchProcess(formData: FormData): Promise<any[]> {
+    return apiFetch<any[]>("/api/doc/batch-process", {
       method: "POST",
       body: formData,
     });
@@ -216,9 +235,27 @@ export type CompileModification = {
   new_text: string;
 };
 
+export const SettingsAPI = {
+  async get(): Promise<any> {
+    return apiFetch<any>("/api/settings/");
+  },
+  async update(data: any): Promise<any> {
+    return apiFetch<any>("/api/settings/", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 export const PptAPI = {
   async process(formData: FormData): Promise<PptProcessResponse> {
     return apiFetch<PptProcessResponse>("/api/ppt/process", {
+      method: "POST",
+      body: formData,
+    });
+  },
+  async batchProcess(formData: FormData): Promise<any[]> {
+    return apiFetch<any[]>("/api/ppt/batch-process", {
       method: "POST",
       body: formData,
     });
@@ -242,6 +279,91 @@ export const PptAPI = {
     }
 
     return res.blob();
+  },
+};
+
+export const ExportAPI = {
+  getPdfUrl(sessionId: string): string {
+    return `${API_BASE_URL}/api/doc/${sessionId}/export/pdf`;
+  },
+  getWordUrl(sessionId: string): string {
+    return `${API_BASE_URL}/api/doc/${sessionId}/export/docx`;
+  }
+};
+
+export type UserProfile = {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+};
+
+export type AuthResponse = {
+  access_token: string;
+  token_type: string;
+  user: UserProfile;
+};
+
+export const AuthAPI = {
+  async signup(data: any): Promise<AuthResponse> {
+    return apiFetch<AuthResponse>("/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async login(data: any): Promise<AuthResponse> {
+    return apiFetch<AuthResponse>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async logout(): Promise<void> {
+    await apiFetch<void>("/api/auth/logout", {
+      method: "POST",
+    });
+  },
+  async getMe(): Promise<UserProfile> {
+    return apiFetch<UserProfile>("/api/auth/me");
+  },
+};
+
+export type CrashReportPayload = {
+  route: string;
+  error_type: string;
+  message: string;
+  stack_summary?: string | null;
+  consent_flag: boolean;
+  session_id?: string | null;
+};
+
+export type TelemetryEvent = {
+  id: string;
+  timestamp: string;
+  user_id: string | null;
+  session_id: string | null;
+  route: string;
+  error_type: string;
+  message: string;
+  stack_summary: string | null;
+  consent_flag: boolean;
+};
+
+export type TelemetryListResponse = {
+  total: number;
+  page: number;
+  limit: number;
+  events: TelemetryEvent[];
+};
+
+export const TelemetryAPI = {
+  async recordCrash(payload: CrashReportPayload): Promise<any> {
+    return apiFetch<any>("/api/telemetry/crash", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  async getEvents(page = 1, limit = 20): Promise<TelemetryListResponse> {
+    return apiFetch<TelemetryListResponse>(`/api/telemetry/events?page=${page}&limit=${limit}`);
   },
 };
 

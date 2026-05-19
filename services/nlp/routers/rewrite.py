@@ -1,7 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session as DBSession
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 
+from database import get_db
 from analysis.rewriter import generate_rewrite
 from analysis.evaluator import calculate_similarity, calculate_perplexity
 from runtime.config import REWRITE_MAX_EXPANSION, HALLUCINATION_SIMILARITY_THRESHOLD
@@ -23,7 +25,7 @@ class RewriteResponse(BaseModel):
     eval_scores: Optional[EvalScores] = None
 
 @router.post("/rewrite", response_model=RewriteResponse)
-def rewrite_segment(req: RewriteRequest):
+def rewrite_segment(req: RewriteRequest, db: DBSession = Depends(get_db)):
     """
     Generates an AI rewrite of the provided text.
     Enforces strict length constraints (discarding rewrites that overflow).
@@ -32,7 +34,7 @@ def rewrite_segment(req: RewriteRequest):
     flags = []
     
     # 1. Generate the rewrite
-    rewritten_text = generate_rewrite(req.original_text, tone=req.tone)
+    rewritten_text = generate_rewrite(req.original_text, tone=req.tone, db=db)
     
     if not rewritten_text:
         # Fallback if generation fails or is disabled

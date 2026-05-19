@@ -77,5 +77,47 @@ class ModelRegistry:
             "loaded_models": list(cls._cache.keys())
         }
 
+    @classmethod
+    def call_user_hosted_endpoint(cls, endpoint: str, model_name: str, prompt: str) -> str:
+        """
+        Sends a completion request to a user-hosted OpenAI-compatible chat API (e.g. Ollama, vLLM, LocalAI).
+        """
+        import json
+        import urllib.request
+        from urllib.error import URLError
+
+        # Construct endpoint URL
+        url = endpoint.rstrip("/")
+        if not url.endswith("/chat/completions"):
+            url = f"{url}/chat/completions"
+
+        # Payload
+        payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": "You are a professional corporate content writer and presentation specialist. Keep sentences concise, clear, and direct. Retain the original meaning perfectly."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.7
+        }
+
+        logger.info(f"Posting completion request to user endpoint: {url} (model: {model_name})")
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=12) as response:
+                res_body = json.loads(response.read().decode("utf-8"))
+                content = res_body["choices"][0]["message"]["content"].strip()
+                return content
+        except Exception as e:
+            logger.error(f"Failed calling user hosted endpoint at {url}: {str(e)}")
+            raise e
+
 # Global registry instance
 registry = ModelRegistry()

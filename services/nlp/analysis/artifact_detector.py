@@ -15,6 +15,9 @@ def detect_artifacts(text: str, paragraph_context: str = "") -> List[Dict[str, A
     # Match [1], [12], Source:, †, ‡
     citation_patterns = [
         r'\[\d+\]',
+        r'\[Artifact:\s*.*?\]',
+        r'\[Draft\s+.*?\]',
+        r'\(Ref:\s*.*?\)',
         r'Source:',
         r'Citation needed',
         r'\u2020', # Dagger

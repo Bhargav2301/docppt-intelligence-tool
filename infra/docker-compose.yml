@@ -26,6 +26,9 @@ services:
       - model_cache:/root/.cache/huggingface
     environment:
       - ENV=development
+      - ADVANCED_AI_ENABLED=false
+      - ADVANCED_MODEL_ENDPOINT=http://host.docker.internal:11434/v1
+      - ADVANCED_MODEL_NAME=llama3:latest
 
   db:
     image: postgres:15-alpine

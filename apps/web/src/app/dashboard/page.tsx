@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, History, Clock, FileText, Presentation, Activity, RefreshCw, Eye } from "lucide-react";
+import { Plus, History, Clock, FileText, Presentation, Activity, RefreshCw, Eye, Trash2 } from "lucide-react";
 import { SessionAPI, RecentSessionItem } from "@/lib/api";
 
 export default function Dashboard() {
@@ -131,7 +131,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
                     {getStatusBadge(session.status)}
                     
                     {session.status === 'completed' && (
@@ -143,6 +143,24 @@ export default function Dashboard() {
                         <Eye className="w-4 h-4" />
                       </Link>
                     )}
+
+                    <button
+                      onClick={async () => {
+                        if (confirm("Are you sure you want to delete this session?")) {
+                          try {
+                            await SessionAPI.delete(session.id);
+                            setSessions(sessions.filter(s => s.id !== session.id));
+                          } catch (e) {
+                            console.error(e);
+                            alert("Failed to delete session");
+                          }
+                        }
+                      }}
+                      className="p-2 text-[var(--text-secondary)] hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 rounded-md transition-colors"
+                      title="Delete Session"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               ))}

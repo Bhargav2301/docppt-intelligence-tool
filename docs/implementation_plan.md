@@ -450,6 +450,82 @@ Deploy in a way that preserves the low-cost model strategy.
 - No paid API key is required.
 - Sample doc and PPT can be processed end-to-end.
 
+## Phase 14: Batch Processing (Docs & PPTs)
+
+### Goal
+
+Allow multiple documents or PPTX files to be processed in a single user action, creating separate sessions while tracking statuses in a batch UI.
+
+### Tasks
+
+- Add `POST /api/ppt/batch-process` in `services/nlp/routers/ppt.py` that loops over uploads and runs humanization.
+- Refactor single PPT processing into `process_single_ppt_internal` for route consolidation.
+- Build/verify `/api/doc/batch-process` in `services/nlp/routers/doc.py`.
+- Add `PptAPI.batchProcess(formData)` in `apps/web/src/lib/api.ts`.
+- Update `apps/web/src/app/process/doc/page.tsx` and `apps/web/src/app/process/ppt/page.tsx` to support selecting multiple files and entering list-based URL inputs, showing individual item progress, and linking to their review sessions.
+
+### Done Criteria
+
+- Multiple docs and PPTs can be submitted in one action.
+- Partial failures are handled gracefully without breaking the batch run.
+- UI displays a clear batch summary grid with progress indicators.
+
+## Phase 15: Advanced AI Models
+
+### Goal
+
+Provide high-quality professional rewrites via local Llama/Mistral models using a user-hosted endpoint with fallback options and detailed performance tracking.
+
+### Tasks
+
+- Define `ModelRun` (`model_runs` table) and update `UserSettings` (`user_settings` table) in `services/nlp/models.py`.
+- Update settings API GET/PUT schemas and handlers in `services/nlp/routers/settings.py` to support endpoint settings.
+- Implement OpenAI-compatible lazy http client connection in `services/nlp/runtime/registry.py`.
+- Update `generate_rewrite` in `services/nlp/analysis/rewriter.py` to route through user-hosted endpoints when selected, measure execution times, write run logs to `ModelRun`, and fall back to local CPU models on error.
+- Add Settings controls in `apps/web/src/app/settings/page.tsx` to configure advanced model endpoints and names.
+
+### Done Criteria
+
+- Advanced mode can be enabled/disabled from the Settings page.
+- Rewrites are routed through user-hosted endpoints.
+- Unreachable endpoints trigger graceful fallback to local CPU models with UI alerts.
+- Model execution logs are recorded correctly in the database.
+
+## Phase 16: PDF & Word exports
+
+### Goal
+
+Enable local generation and download of styled PDF and Word doc summaries for document analysis results.
+
+### Tasks
+
+- Add `reportlab` to `requirements.txt`.
+- Add routes `GET /api/doc/{session_id}/export/pdf` and `GET /api/doc/{session_id}/export/docx` under `services/nlp/routers/export.py`.
+- Implement high-fidelity styled PDF generation using `reportlab.platypus`.
+- Implement Word export using `python-docx` containing structured analysis, requirements, and assumptions.
+- Store exports in `files` table and local storage.
+- Add "Download PDF" and "Download Word" buttons next to current export buttons on the session detail page in `apps/web/src/app/session/[id]/page.tsx`.
+
+### Done Criteria
+
+- PDF and Word summaries can be generated dynamically.
+- Download buttons on the session detail page work seamlessly.
+- Output files are logged under the correct session in the `files` table.
+
+## Phase 17: Production Deployment Polish
+
+### Goal
+
+Ensure private, low-cost local-first containerized deployment is E2E stable and easy to run.
+
+### Tasks
+
+- Add production flags and optimize memory variables in `infra/docker-compose.yml`.
+- Create local model caching download script under `services/nlp/scratch/download_models.py`.
+- Update `docs/DEPLOYMENT_GUIDE.md` with Ollama config and local docker-compose commands.
+
+---
+
 ## Build Dependency Order
 
 ```text
@@ -464,8 +540,11 @@ Project setup
             -> Rewrite generation
               -> Review UI and export
                 -> Dashboard/session history
-                  -> Testing
-                    -> Deployment
+                  -> PDF & Word Exports (New)
+                  -> Batch Processing (New)
+                  -> Advanced AI (New)
+                    -> Testing
+                      -> Deployment
 ```
 
 ## MVP Completion Definition
@@ -479,6 +558,9 @@ The MVP is complete when:
 - The app suggests humanized rewrites without paid LLM APIs.
 - The user can review and export a cleaned PPTX.
 - The tool has fallback behavior when local models are unavailable.
-- All outputs are downloadable.
+- All outputs are downloadable, including PDF, DOCX, Markdown, and JSON.
+- Batch processing allows multi-file and multi-url actions.
+- Settings support local Llama/Mistral models via user-hosted endpoints with fallback logic.
 - The documentation clearly states that AI-likeness scores are probabilistic quality signals, not proof.
+
 

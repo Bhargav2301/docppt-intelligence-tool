@@ -1,0 +1,43 @@
+services:
+  # FastAPI backend service
+  - type: web
+    name: docppt-backend
+    runtime: docker
+    dockerContext: services/nlp
+    dockerfilePath: services/nlp/Dockerfile
+    plan: free
+    envVars:
+      - key: ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: docppt-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MANAGED_LLM_ENDPOINT
+        value: https://api.managed-llm.com/v1
+      - key: MANAGED_LLM_API_KEY
+        sync: false
+        value: placeholder-key-replace-me
+
+  # Next.js frontend web service
+  - type: web
+    name: docppt-frontend
+    runtime: docker
+    dockerContext: apps/web
+    dockerfilePath: apps/web/Dockerfile
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_BASE_URL
+        fromService:
+          name: docppt-backend
+          property: url
+
+databases:
+  - name: docppt-db
+    plan: free
+    databaseName: docppt
+    user: postgres

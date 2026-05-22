@@ -106,27 +106,42 @@ def generate_rewrite(
 
     # 2. Fall back to local model if selected, or if remote calls fell back
     if rewritten is None:
-        instruction_model = registry.get_instruction_model()
-        if not instruction_model:
-            logger.warning("Instruction model not available for rewrite.")
-            if status == "success" or status == "fallback":
+        try:
+            instruction_model = registry.get_instruction_model()
+            if not instruction_model:
+                logger.warning("Instruction model not available for rewrite.")
+                if status == "success" or status == "fallback":
+                    if mode in ("user_hosted_endpoint", "managed_endpoint"):
+                        status = "fallback"
+                    else:
+                        status = "failed"
+                    err_code = "MODEL_UNAVAILABLE"
+                    err_msg = "Local instruction model not available"
+            else:
+                try:
+                    # Construct prompt for flan-t5-small
+                    prompt = f"Rewrite the following text to be more {tone} and clear, but keep the original meaning: {text}"
+                    input_words = len(text.split())
+                    max_tokens = max(50, int(input_words * 2))
+                    
+                    result = instruction_model(prompt, max_new_tokens=max_tokens, do_sample=True, temperature=0.7)
+                    rewritten = result[0]['generated_text'].strip()
+                except Exception as e:
+                    if mode in ("user_hosted_endpoint", "managed_endpoint"):
+                        status = "fallback"
+                    else:
+                        status = "failed"
+                    err_code = "LOCAL_MODEL_ERROR"
+                    err_msg = str(e)
+                    logger.error(f"Failed to generate rewrite: {str(e)}")
+        except Exception as load_err:
+            if mode in ("user_hosted_endpoint", "managed_endpoint"):
+                status = "fallback"
+            else:
                 status = "failed"
-                err_code = "MODEL_UNAVAILABLE"
-                err_msg = "Local instruction model not available"
-        else:
-            try:
-                # Construct prompt for flan-t5-small
-                prompt = f"Rewrite the following text to be more {tone} and clear, but keep the original meaning: {text}"
-                input_words = len(text.split())
-                max_tokens = max(50, int(input_words * 2))
-                
-                result = instruction_model(prompt, max_new_tokens=max_tokens, do_sample=True, temperature=0.7)
-                rewritten = result[0]['generated_text'].strip()
-            except Exception as e:
-                status = "failed"
-                err_code = "LOCAL_MODEL_ERROR"
-                err_msg = str(e)
-                logger.error(f"Failed to generate rewrite: {str(e)}")
+            err_code = "LOCAL_MODEL_LOAD_ERROR"
+            err_msg = str(load_err)
+            logger.error(f"Failed to load instruction model: {str(load_err)}")
 
     duration_ms = int((time.time() - start_time) * 1000)
 

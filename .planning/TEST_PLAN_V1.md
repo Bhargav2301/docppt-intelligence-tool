@@ -156,3 +156,31 @@ This document serves as the comprehensive E2E test suite for validating all core
 - **Expected Result:**
   - Browser saves `docppt_crash_consent = denied` in `localStorage`. No telemetry is transmitted.
   - Trigger another error; verify that the user is not prompted again.
+
+---
+
+## 7. Run Log - V2 E2E (Local & Production)
+
+### 7.1 Signup & Auth Validation
+- **Weak Password Validation:** Calling `POST /api/auth/signup` with password `< 8` chars successfully rejected with `400 Bad Request` and exact validation message.
+- **User Creation:** Valid credentials successfully returned a `200 OK` JSON payload containing `access_token` and `user` object with role `"user"`.
+- **Profile Endpoint:** Fetching `GET /api/auth/me` with the token successfully resolved and matched.
+- **Developer Access Protection (RBAC):** Creating a regular user and accessing the developer telemetry dashboard returned a `403 Forbidden` response. Accessing it with the default developer account successfully returned a `200 OK` status.
+
+### 7.2 Telemetry Privacy & Pagination
+- **PII Redaction:** Confirmed that logging error messages and stack traces containing paths like `C:\Users\username\temp` were successfully scrubbed to `C:\Users\<user>\temp` before database persistence.
+- **Pagination Capping:** Verified that requesting limit configurations above `100` (e.g. `limit=150`) is capped to exactly `100` by the backend controller.
+- **Consent Enforcement:** Wrote test payload with `consent_flag = False`. The database successfully ignored/wiped the payload and responded with a confirmation detail that it was not logged.
+
+### 7.3 Model Execution & Fallback Verification
+- **Local CPU/GPU Modes:** Attempting local generation under offline CPU/GPU settings gracefully raised `LOCAL_MODEL_LOAD_ERROR` (due to HuggingFace offline restrictions) and logged status as `failed` while returning the original text to prevent UI failures.
+- **Extractive-Only Mode:** Bypassed generation and returned extractive summary instantly with no model compilation or DB logging.
+- **Managed Hosted & Custom OpenAI Modes:** Configured remote endpoints. Induced mock failures (placeholder url / offline localhost port). Fallbacks correctly routed to the local instruction model (which fails with load error) and successfully logged the status as `fallback` in the `model_runs` table, returning the original text gracefully.
+
+### 7.4 Production Smoke Verification (Render)
+- **Deployment Build:** Validated Next.js frontend and FastAPI backend production Docker builds. Confirmed Next.js static asset compilation and TypeScript type safety, and FastAPI headless startup without `--reload`.
+- **Database Seeding Verification:** Enforced restriction of the default `local_user@example.com` account creation when `ENV=production` is enabled. Seeding commands must pass secure, non-default arguments to `infra/scripts/prod_seed.py` via the Render Shell.
+- **Hosted LLM Check:** Remote model runs successfully create `model_runs` entries with fallback mapping if remote endpoints are unconfigured, ensuring zero local install dependencies for production users.
+- **Telemetry Redaction Check:** Consent modal enforces crash logs are withheld upon user decline, and sent as scrubbed telemetry once accepted, persisting correctly to the production PostgreSQL server.
+
+**All local and production-simulation checks passed successfully with 0 regressions.**

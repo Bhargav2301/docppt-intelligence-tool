@@ -5,6 +5,7 @@ import uuid
 
 from database import get_db
 from models import User, UserSettings
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -16,15 +17,11 @@ class SettingsUpdate(BaseModel):
     advanced_model_endpoint: str = None
 
 @router.get("/")
-def get_settings(db: DBSession = Depends(get_db)):
-    user = db.query(User).filter(User.email == "local_user@example.com").first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    settings = db.query(UserSettings).filter(UserSettings.user_id == user.id).first()
+def get_settings(db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.id).first()
     if not settings:
         # Create default settings if not exists
-        settings = UserSettings(user_id=user.id)
+        settings = UserSettings(user_id=current_user.id)
         db.add(settings)
         db.commit()
         db.refresh(settings)
@@ -32,14 +29,10 @@ def get_settings(db: DBSession = Depends(get_db)):
     return settings
 
 @router.put("/")
-def update_settings(update: SettingsUpdate, db: DBSession = Depends(get_db)):
-    user = db.query(User).filter(User.email == "local_user@example.com").first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    settings = db.query(UserSettings).filter(UserSettings.user_id == user.id).first()
+def update_settings(update: SettingsUpdate, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.id).first()
     if not settings:
-        settings = UserSettings(user_id=user.id)
+        settings = UserSettings(user_id=current_user.id)
         db.add(settings)
     
     if update.theme is not None:
@@ -56,3 +49,4 @@ def update_settings(update: SettingsUpdate, db: DBSession = Depends(get_db)):
     db.commit()
     db.refresh(settings)
     return settings
+

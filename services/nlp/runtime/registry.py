@@ -12,59 +12,86 @@ class ModelRegistry:
     _cache: Dict[str, Any] = {}
 
     @classmethod
-    def _is_extractive_mode(cls) -> bool:
-        return MODEL_MODE == "extractive_only"
+    def _get_active_mode(cls) -> str:
+        try:
+            from database import SessionLocal
+            from models import User, UserSettings
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.email == "local_user@example.com").first()
+                if user:
+                    settings = db.query(UserSettings).filter(UserSettings.user_id == user.id).first()
+                    if settings and settings.model_mode:
+                        return settings.model_mode
+            except Exception:
+                pass
+            finally:
+                db.close()
+        except Exception:
+            pass
+        return MODEL_MODE
+
+    @classmethod
+    def _get_device_for_pipeline(cls, mode: str) -> int:
+        try:
+            import torch
+            if mode == "local_gpu" and torch.cuda.is_available():
+                return 0
+        except Exception:
+            pass
+        return -1
+
+    @classmethod
+    def _get_device_for_sentence_transformer(cls, mode: str) -> str:
+        try:
+            import torch
+            if mode == "local_gpu" and torch.cuda.is_available():
+                return "cuda"
+        except Exception:
+            pass
+        return "cpu"
 
     @classmethod
     def get_summarization_pipeline(cls):
-        if cls._is_extractive_mode():
-            return None
-            
         cache_key = f"summarization_{SUMMARIZATION_MODEL}"
         if cache_key not in cls._cache:
             logger.info(f"Loading summarization model: {SUMMARIZATION_MODEL}")
             from transformers import pipeline
-            # Fallback to CPU by default or specific local GPU settings
-            device = -1 if MODEL_MODE == "local_cpu" else 0
+            mode = cls._get_active_mode()
+            device = cls._get_device_for_pipeline(mode)
             cls._cache[cache_key] = pipeline("summarization", model=SUMMARIZATION_MODEL, device=device)
         return cls._cache[cache_key]
 
     @classmethod
     def get_embedding_model(cls):
-        if cls._is_extractive_mode():
-            return None
-            
         cache_key = f"embedding_{EMBEDDING_MODEL}"
         if cache_key not in cls._cache:
             logger.info(f"Loading embedding model: {EMBEDDING_MODEL}")
             from sentence_transformers import SentenceTransformer
-            device = "cpu" if MODEL_MODE == "local_cpu" else "cuda"
+            mode = cls._get_active_mode()
+            device = cls._get_device_for_sentence_transformer(mode)
             cls._cache[cache_key] = SentenceTransformer(EMBEDDING_MODEL, device=device)
         return cls._cache[cache_key]
 
     @classmethod
     def get_instruction_model(cls):
-        if cls._is_extractive_mode():
-            return None
-            
         cache_key = f"instruction_{INSTRUCTION_MODEL}"
         if cache_key not in cls._cache:
             logger.info(f"Loading instruction model: {INSTRUCTION_MODEL}")
             from transformers import pipeline
-            device = -1 if MODEL_MODE == "local_cpu" else 0
+            mode = cls._get_active_mode()
+            device = cls._get_device_for_pipeline(mode)
             cls._cache[cache_key] = pipeline("text2text-generation", model=INSTRUCTION_MODEL, device=device)
         return cls._cache[cache_key]
 
     @classmethod
     def get_perplexity_model(cls):
-        if cls._is_extractive_mode():
-            return None
-            
         cache_key = f"perplexity_{PERPLEXITY_MODEL}"
         if cache_key not in cls._cache:
             logger.info(f"Loading perplexity model: {PERPLEXITY_MODEL}")
             from transformers import AutoModelForCausalLM, AutoTokenizer
-            device = "cpu" if MODEL_MODE == "local_cpu" else "cuda"
+            mode = cls._get_active_mode()
+            device = cls._get_device_for_sentence_transformer(mode)
             tokenizer = AutoTokenizer.from_pretrained(PERPLEXITY_MODEL)
             model = AutoModelForCausalLM.from_pretrained(PERPLEXITY_MODEL).to(device)
             cls._cache[cache_key] = (tokenizer, model)
@@ -73,9 +100,10 @@ class ModelRegistry:
     @classmethod
     def get_loaded_models_status(cls):
         return {
-            "mode": MODEL_MODE,
+            "mode": cls._get_active_mode(),
             "loaded_models": list(cls._cache.keys())
         }
+
 
     @classmethod
     def call_user_hosted_endpoint(cls, endpoint: str, model_name: str, prompt: str) -> str:

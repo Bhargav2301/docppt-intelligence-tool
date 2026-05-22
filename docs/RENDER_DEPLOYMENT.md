@@ -55,31 +55,56 @@ To maintain a zero-friction local developer workflow while supporting standard e
 
 ## 4. Render Build & Run Commands
 
-### 4.1 Backend Service (`nlp`) Setup
-- **Service Type:** Web Service (Python)
-- **Build Command:**
-  ```bash
-  pip install -r services/nlp/requirements.txt
-  ```
-- **Start Command:**
-  ```bash
-  uvicorn services.nlp.main:app --host 0.0.0.0 --port 8000
-  ```
+## 4. Render Blueprint Deployment (Automated Flow)
 
-### 4.2 Frontend Service (`web`) Setup
-- **Service Type:** Web Service (Node)
-- **Build Command:**
-  ```bash
-  cd apps/web && npm install && npm run build
-  ```
-- **Start Command:**
-  ```bash
-  cd apps/web && npm run start
-  ```
+We recommend using Render's **Blueprint (YAML) flow** to deploy the entire stack at once:
+
+1. Push this repository to your GitHub account.
+2. Log in to the [Render Dashboard](https://dashboard.render.com).
+3. Click **New** (top right) and select **Blueprint**.
+4. Connect your GitHub repository.
+5. Render will automatically parse the `render.yaml` file in the root and configure three services:
+   - **`docppt-db`**: A managed PostgreSQL database.
+   - **`docppt-backend`**: FastAPI web service using the Dockerfile under `services/nlp`.
+   - **`docppt-frontend`**: Next.js web service using the Dockerfile under `apps/web`.
+6. Click **Apply** to deploy the services.
 
 ---
 
-## 5. Post-Deployment Smoke Test Checklist
+## 5. Production Database Seeding
+
+Once the services are deployed, you must seed a secure developer account to monitor telemetry and error events:
+
+1. Go to your Render Dashboard and open the **`docppt-backend`** Web Service.
+2. Select the **Shell** tab on the left-side navigation to open a terminal context inside the container.
+3. Run the following seed script command:
+   ```bash
+   python infra/scripts/prod_seed.py \
+     --email your-developer-email@example.com \
+     --password YourSecurePassword123 \
+     --role developer
+   ```
+4. This command will hash the password and securely insert the user into the production Postgres database. Default credentials like `local_user@example.com` are blocked and will NOT be seeded in production.
+
+---
+
+## 6. Making the Site Usable by Other Users
+
+To share the application with external team members or users:
+
+1. **Keep Public Visibility Enabled**:
+   - The frontend service `docppt-frontend` must remain a **Public Web Service** so users can access it at `https://docppt-frontend.onrender.com`.
+2. **User Sign-up & Isolation**:
+   - Authentication is fully enabled. Other users can register themselves at `/auth/signup` and log in.
+   - Standard users are assigned `role = "user"`. They will only see their own sessions and will be blocked from accessing developer telemetry dashboards.
+3. **Hosted LLM Enablement (Zero Local Installs)**:
+   - In production, users should not be expected to run a local Ollama endpoint.
+   - As a developer, configure the `MANAGED_LLM_ENDPOINT` and `MANAGED_LLM_API_KEY` (e.g. OpenAI, Anthropic, or a self-hosted cloud Llama model) in the backend's environment variables.
+   - In Settings, select **Managed Hosted LLM** and save. The app will now process summaries and rewrites using the cloud endpoint for all users without requiring any local setups.
+
+---
+
+## 7. Post-Deployment Smoke Test Checklist
 
 Execute these 6 verification checks immediately after successfully deploying to Render to ensure integrity:
 
@@ -94,7 +119,7 @@ Execute these 6 verification checks immediately after successfully deploying to 
 - `[ ]` **3. Security Sandbox Verification (Developer Isolation)**
   - Attempt to navigate directly to `https://<your-web-url>.onrender.com/dev/dashboard` using your fresh test account.
   - **Success Criteria:** Access is blocked; user receives a `403 Forbidden` response or a clean UI block redirecting them to `/dashboard`.
-
+ 
 - `[ ]` **4. Doc Extraction & NLP Pipeline**
   - Click **Analyze Doc**, paste a sample specifications text, and execute.
   - **Success Criteria:** Text normalizes, summary successfully populates, requirements prioritized properly, and no C-extension or memory crashes occur on Render container.
@@ -106,3 +131,4 @@ Execute these 6 verification checks immediately after successfully deploying to 
 - `[ ]` **6. Crash Telemetry Consent Compliance**
   - Toggle off telemetry in Settings. Trigger an error, check the console; verify no network calls were made to `/api/telemetry/crash`.
   - Toggle it back on. Trigger an error; verify that a clean, scrubbed telemetry payload containing *no document content* is sent and stored in the database.
+

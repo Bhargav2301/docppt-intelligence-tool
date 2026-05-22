@@ -75,7 +75,7 @@ except Exception as e:
 app = FastAPI(title="DocPPT NLP Service", version="1.0.0")
 
 # Setup CORS origins dynamically from FRONTEND_URL or default to localhost:3000
-origins = ["http://localhost:3000"]
+origins = ["http://localhost:3000", "http://localhost:5173"]
 frontend_url = os.getenv("FRONTEND_URL")
 if frontend_url:
     origins.append(frontend_url.rstrip("/"))
@@ -83,6 +83,7 @@ if frontend_url:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://.*\.onrender\.com|http://localhost:\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

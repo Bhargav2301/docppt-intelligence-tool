@@ -42,6 +42,12 @@ All configuration is driven purely by environment variables. No Render URLs are 
 |----------------------|-----------------------------------|--------------------------|-------------|
 | `NEXT_PUBLIC_API_BASE_URL` | `https://docppt-nlp.onrender.com` | `http://localhost:8000` | Points the browser API clients directly to the FastAPI service URL. |
 
+> [!IMPORTANT]
+> **Build-Time Compilation Requirement**:
+> Because Next.js compiles environment variables starting with `NEXT_PUBLIC_` *during* the build step (`npm run build`), `NEXT_PUBLIC_API_BASE_URL` is baked into the JavaScript bundle. 
+> To support this, our `apps/web/Dockerfile` declares `ARG NEXT_PUBLIC_API_BASE_URL` which Render automatically maps from the service environment variable during the Docker build stage.
+> If you update this variable on Render, you **must** redeploy using **Clear Build Cache & Deploy** so Next.js recompiles with the correct URL.
+
 ---
 
 ## 3. Database Strategy: SQLite (Dev) vs. Postgres (Prod)

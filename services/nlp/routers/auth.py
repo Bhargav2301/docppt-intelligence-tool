@@ -1,7 +1,7 @@
 import os
 import uuid
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.orm import Session as DBSession
 from pydantic import BaseModel
@@ -46,10 +46,22 @@ def _user_to_response(user: "User") -> UserResponse:
         role=user.role or "user",
     )
 
+def _utcnow() -> datetime:
+    """Return current UTC time as a timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
+
+def _ensure_aware(dt: datetime) -> datetime:
+    """Treat naive datetimes as UTC to compare safely with aware values."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def clean_expired_tokens(db: DBSession):
     """Periodic cleanup of expired tokens."""
     try:
-        now = datetime.utcnow()
+        now = _utcnow()
         expired = db.query(UserSession).filter(UserSession.expires_at < now).all()
         for tok in expired:
             db.delete(tok)
@@ -92,7 +104,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if db_session.expires_at < datetime.utcnow():
+    if _ensure_aware(db_session.expires_at) < _utcnow():
         db.delete(db_session)
         db.commit()
         raise HTTPException(
@@ -150,7 +162,7 @@ def signup(req: SignupRequest, db: DBSession = Depends(get_db)):
     new_session = UserSession(
         user_id=new_user.id,
         token=token_str,
-        expires_at=datetime.utcnow() + timedelta(days=7)
+        expires_at=_utcnow() + timedelta(days=7)
     )
     db.add(new_session)
     db.commit()
@@ -178,7 +190,7 @@ def login(req: LoginRequest, db: DBSession = Depends(get_db)):
     new_session = UserSession(
         user_id=user.id,
         token=token_str,
-        expires_at=datetime.utcnow() + timedelta(days=7)
+        expires_at=_utcnow() + timedelta(days=7)
     )
     db.add(new_session)
     db.commit()

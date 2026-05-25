@@ -25,8 +25,8 @@ class LoginRequest(BaseModel):
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
-    full_name: str
-    role: str
+    full_name: str = ""
+    role: str = "user"
 
     class Config:
         from_attributes = True
@@ -35,6 +35,16 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+def _user_to_response(user: "User") -> UserResponse:
+    """Coerce an ORM User into a UserResponse, tolerating NULL columns from legacy rows."""
+    return UserResponse(
+        id=user.id,
+        email=user.email or "",
+        full_name=user.full_name or (user.email.split("@")[0] if user.email else "User"),
+        role=user.role or "user",
+    )
 
 def clean_expired_tokens(db: DBSession):
     """Periodic cleanup of expired tokens."""
@@ -98,6 +108,13 @@ def get_current_user(
             detail="User account not found.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Defensive backfill: legacy rows in production may have NULL role/full_name,
+    # which causes ResponseValidationError downstream. Patch in-memory only.
+    if user.role is None:
+        user.role = "user"
+    if user.full_name is None:
+        user.full_name = (user.email.split("@")[0] if user.email else "User")
     return user
 
 @router.post("/signup", response_model=TokenResponse)
@@ -140,7 +157,7 @@ def signup(req: SignupRequest, db: DBSession = Depends(get_db)):
 
     return TokenResponse(
         access_token=token_str,
-        user=new_user
+        user=_user_to_response(new_user)
     )
 
 @router.post("/login", response_model=TokenResponse)
@@ -168,7 +185,7 @@ def login(req: LoginRequest, db: DBSession = Depends(get_db)):
 
     return TokenResponse(
         access_token=token_str,
-        user=user
+        user=_user_to_response(user)
     )
 
 @router.post("/logout")
@@ -183,4 +200,4 @@ def logout(authorization: Optional[str] = Header(None), db: DBSession = Depends(
 
 @router.get("/me", response_model=UserResponse)
 def get_me(user: User = Depends(get_current_user)):
-    return user
+    return _user_to_response(user)

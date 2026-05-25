@@ -39,7 +39,15 @@ export default function LoginPage() {
       
       router.push("/dashboard");
     } catch (err: any) {
-      setError(err.message || "Invalid email or password.");
+      if (err && (err.status === 401 || err.status === 403)) {
+        setError("Invalid email or password.");
+      } else if (err && err.status >= 500) {
+        setError("Backend is having trouble right now. Please retry in a few seconds (cold start can take 20-60s).");
+      } else if (err && err.status === 0) {
+        setError("Network error. Check your connection and try again.");
+      } else {
+        setError(err?.message || "Could not sign in. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

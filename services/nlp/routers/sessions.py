@@ -7,6 +7,7 @@ from datetime import datetime
 
 from database import get_db
 from models import Session, User, DocOutput, PptOutput, PptSegment
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -32,8 +33,8 @@ class RecentSessionItem(SessionResponse):
     metrics: dict = {}
 
 @router.get("/recent", response_model=List[RecentSessionItem])
-def get_recent_sessions(limit: int = 20, db: DBSession = Depends(get_db)):
-    db_sessions = db.query(Session).order_by(Session.created_at.desc()).limit(limit).all()
+def get_recent_sessions(limit: int = 20, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_sessions = db.query(Session).filter(Session.user_id == current_user.id).order_by(Session.created_at.desc()).limit(limit).all()
     
     results = []
     for s in db_sessions:
@@ -63,13 +64,9 @@ def get_recent_sessions(limit: int = 20, db: DBSession = Depends(get_db)):
     return results
 
 @router.post("/", response_model=SessionResponse)
-def create_session(session: SessionCreate, db: DBSession = Depends(get_db)):
-    user = db.query(User).filter(User.email == "local_user@example.com").first()
-    if not user:
-        raise HTTPException(status_code=500, detail="Default local user not found in DB.")
-
+def create_session(session: SessionCreate, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_session = Session(
-        user_id=user.id,
+        user_id=current_user.id,
         session_type=session.session_type,
         input_type=session.input_type,
         input_label=session.input_label,
@@ -82,9 +79,9 @@ def create_session(session: SessionCreate, db: DBSession = Depends(get_db)):
     return db_session
 
 @router.get("/{session_id}/detail")
-def get_session_detail(session_id: uuid.UUID, db: DBSession = Depends(get_db)):
+def get_session_detail(session_id: uuid.UUID, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Return session metadata plus its associated output (doc or ppt)."""
-    db_session = db.query(Session).filter(Session.id == session_id).first()
+    db_session = db.query(Session).filter(Session.id == session_id, Session.user_id == current_user.id).first()
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -144,15 +141,15 @@ def get_session_detail(session_id: uuid.UUID, db: DBSession = Depends(get_db)):
     return result
 
 @router.get("/{session_id}", response_model=SessionResponse)
-def get_session(session_id: uuid.UUID, db: DBSession = Depends(get_db)):
-    db_session = db.query(Session).filter(Session.id == session_id).first()
+def get_session(session_id: uuid.UUID, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_session = db.query(Session).filter(Session.id == session_id, Session.user_id == current_user.id).first()
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
     return db_session
 
 @router.delete("/{session_id}")
-def delete_session(session_id: uuid.UUID, db: DBSession = Depends(get_db)):
-    db_session = db.query(Session).filter(Session.id == session_id).first()
+def delete_session(session_id: uuid.UUID, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_session = db.query(Session).filter(Session.id == session_id, Session.user_id == current_user.id).first()
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
     db.delete(db_session)

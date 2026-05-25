@@ -2,6 +2,9 @@ from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session as DBSession
 from typing import Dict, Any, List
+import logging
+
+logger = logging.getLogger(__name__)
 import json
 import io
 import os
@@ -15,7 +18,8 @@ from analysis.rewriter import generate_rewrite
 from analysis.evaluator import calculate_similarity, calculate_perplexity
 from runtime.config import REWRITE_MAX_EXPANSION, HALLUCINATION_SIMILARITY_THRESHOLD
 from database import get_db
-from models import Session, User, PptOutput, PptSegment
+from models import Session, User, PptOutput, PptSegment, File as DbFile
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/ppt", tags=["ppt"])
 
@@ -75,12 +79,27 @@ async def compile_presentation(
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred during PPT compilation: {str(e)}")
 
 @router.post("/compile_session/{session_id}")
-async def compile_session(session_id: str, modifications: str = Form(...), db: DBSession = Depends(get_db)):
+async def compile_session(
+    session_id: str,
+    modifications: str = Form(...),
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Compile using the stored .pptx file for a given session.
     The frontend sends the accepted modifications JSON, and this endpoint
     reads the saved .pptx from disk, applies changes, and streams the result.
     """
+    import uuid
+    try:
+        uuid_obj = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format.")
+
+    db_session = db.query(Session).filter(Session.id == uuid_obj, Session.user_id == current_user.id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found or access denied.")
+
     pptx_path = os.path.join(PPT_UPLOAD_DIR, f"{session_id}.pptx")
     if not os.path.exists(pptx_path):
         raise HTTPException(status_code=404, detail="Original .pptx file not found for this session.")
@@ -120,17 +139,14 @@ async def process_single_ppt_internal(
     file_bytes: bytes,
     filename: str,
     sensitivity: str,
-    db: DBSession
+    db: DBSession,
+    current_user: User
 ) -> Dict[str, Any]:
     """
     Internal helper that executes the E2E presentation humanization pipeline.
     """
-    user = db.query(User).filter(User.email == "local_user@example.com").first()
-    if not user:
-        raise ValueError("Default local user not found.")
-    
     db_session = Session(
-        user_id=user.id,
+        user_id=current_user.id,
         session_type="ppt",
         input_type="pptx",
         input_label=filename,
@@ -267,9 +283,9 @@ async def process_single_ppt_internal(
         db.commit()
 
         # Build File table logging for source .pptx
-        db_file = File(
+        db_file = DbFile(
             session_id=db_session.id,
-            user_id=user.id,
+            user_id=current_user.id,
             file_role="source",
             file_type="pptx",
             storage_path=pptx_path,
@@ -303,7 +319,8 @@ async def process_single_ppt_internal(
 async def process_presentation(
     file: UploadFile = File(...),
     sensitivity: str = Form("conservative"),
-    db: DBSession = Depends(get_db)
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Pipeline for a single presentation.
@@ -317,7 +334,8 @@ async def process_presentation(
             file_bytes=file_bytes,
             filename=file.filename,
             sensitivity=sensitivity,
-            db=db
+            db=db,
+            current_user=current_user
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -326,7 +344,8 @@ async def process_presentation(
 async def batch_process_presentation(
     files: List[UploadFile] = File(...),
     sensitivity: str = Form("conservative"),
-    db: DBSession = Depends(get_db)
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Pipeline for processing multiple presentations in a batch.
@@ -350,7 +369,8 @@ async def batch_process_presentation(
                 file_bytes=file_bytes,
                 filename=file.filename,
                 sensitivity=sensitivity,
-                db=db
+                db=db,
+                current_user=current_user
             )
             session_id = res["session"]["id"]
             results.append(BatchPptItemResponse(

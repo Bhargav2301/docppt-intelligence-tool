@@ -127,20 +127,24 @@ export default function LoginPage() {
           </div>
         </form>
 
-        <div className="relative flex items-center justify-center my-4">
-          <div className="border-t border-[var(--border-subtle)] w-full absolute" />
-          <span className="bg-[var(--bg-surface)] px-3 text-xs text-[var(--text-muted)] relative z-10">
-            LOCAL DEV BYPASS
-          </span>
-        </div>
+        {process.env.NODE_ENV !== "production" && (
+          <>
+            <div className="relative flex items-center justify-center my-4">
+              <div className="border-t border-[var(--border-subtle)] w-full absolute" />
+              <span className="bg-[var(--bg-surface)] px-3 text-xs text-[var(--text-muted)] relative z-10">
+                LOCAL DEV BYPASS
+              </span>
+            </div>
 
-        <button
-          type="button"
-          onClick={handleDevAutoFill}
-          className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg border border-[var(--border-strong)] bg-blue-500/5 text-blue-400 text-xs font-semibold hover:bg-blue-500/10 hover:border-blue-400/40 transition-all"
-        >
-          <Shield className="w-4 h-4" /> Auto-Fill Dev Credentials
-        </button>
+            <button
+              type="button"
+              onClick={handleDevAutoFill}
+              className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg border border-[var(--border-strong)] bg-blue-500/5 text-blue-400 text-xs font-semibold hover:bg-blue-500/10 hover:border-blue-400/40 transition-all"
+            >
+              <Shield className="w-4 h-4" /> Auto-Fill Dev Credentials
+            </button>
+          </>
+        )}
 
         <div className="text-center mt-6 text-sm">
           <span className="text-[var(--text-secondary)]">Don't have an account? </span>

@@ -12,6 +12,8 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
   const pathname = usePathname();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [backendWaking, setBackendWaking] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [pendingCrash, setPendingCrash] = useState<{
     message: string;
     errorType: string;
@@ -23,6 +25,7 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
     const token = localStorage.getItem("docppt_token");
     if (!token) {
       setUser(null);
+      setIsCheckingAuth(false);
       // Redirect to login if accessing dashboard or other restricted routes, but not auth routes or landing page
       if (pathname !== "/" && !pathname.startsWith("/auth/")) {
         router.push("/auth/login");
@@ -30,22 +33,51 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
       return;
     }
 
-    try {
-      const profile = await AuthAPI.getMe();
-      setUser(profile);
-      localStorage.setItem("docppt_user", JSON.stringify(profile));
-    } catch (err) {
-      // Token expired or invalid
-      localStorage.removeItem("docppt_token");
-      localStorage.removeItem("docppt_user");
-      setUser(null);
-      if (pathname !== "/" && !pathname.startsWith("/auth/")) {
-        router.push("/auth/login");
+    let retries = 2;
+    let delay = 1000;
+
+    while (true) {
+      try {
+        const profile = await AuthAPI.getMe();
+        setUser(profile);
+        localStorage.setItem("docppt_user", JSON.stringify(profile));
+        setBackendWaking(false);
+        setIsCheckingAuth(false);
+        break;
+      } catch (err: any) {
+        // True auth failures (e.g. 401 or 403)
+        const isAuthFailure = err && (err.status === 401 || err.status === 403);
+
+        if (isAuthFailure) {
+          localStorage.removeItem("docppt_token");
+          localStorage.removeItem("docppt_user");
+          setUser(null);
+          setBackendWaking(false);
+          setIsCheckingAuth(false);
+          if (pathname !== "/" && !pathname.startsWith("/auth/")) {
+            router.push("/auth/login");
+          }
+          break;
+        }
+
+        // Network error, timeout, or server error (5xx)
+        if (retries > 0) {
+          setBackendWaking(true);
+          retries--;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          delay *= 2;
+        } else {
+          // Out of retries, preserve token to avoid kicking user out, but stop trying
+          setBackendWaking(false);
+          setIsCheckingAuth(false);
+          break;
+        }
       }
     }
   };
 
   useEffect(() => {
+    setIsCheckingAuth(true);
     checkAuth();
 
     // Listen to localStorage changes across tabs/components
@@ -211,9 +243,25 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
         </div>
       </header>
 
+      {backendWaking && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-400 py-2.5 px-4 text-center text-xs font-semibold flex items-center justify-center gap-2 animate-pulse">
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+          Backend is waking up (cold start). Retrying connection...
+        </div>
+      )}
+
       {/* Main Page Children */}
       <main className="flex-1 w-full mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        {children}
+        {isCheckingAuth && pathname !== "/" && !pathname.startsWith("/auth/") ? (
+          <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+            <div className="w-8 h-8 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-[var(--text-secondary)] font-medium">
+              {backendWaking ? "Backend is waking up, please wait..." : "Checking session..."}
+            </p>
+          </div>
+        ) : (
+          children
+        )}
       </main>
 
       {/* global consent modal */}

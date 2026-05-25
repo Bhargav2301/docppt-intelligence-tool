@@ -2,15 +2,14 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# The default docker-compose connection string for the NLP container
-# DB connects using postgres user
-SQLALCHEMY_DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://postgres:password@db:5432/docppt"
-)
-
-# For testing outside docker, use SQLite for local_dev to avoid Postgres auth issues
-if os.getenv("ENV") == "local_dev":
-    SQLALCHEMY_DATABASE_URL = "sqlite:///./docppt.db"
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    if os.getenv("ENV", "development") != "production":
+        SQLALCHEMY_DATABASE_URL = "sqlite:///./docppt.db"
+    else:
+        SQLALCHEMY_DATABASE_URL = "postgresql://postgres:password@db:5432/docppt"
+else:
+    SQLALCHEMY_DATABASE_URL = DATABASE_URL
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in SQLALCHEMY_DATABASE_URL else {}

@@ -40,27 +40,30 @@ def seed_default_user():
     try:
         user = db.query(models.User).filter(models.User.email == "local_user@example.com").first()
         if user:
-            print("Deleting existing developer user for clean seed...")
-            db.delete(user)
+            print("Developer user already exists. Updating credentials/role if necessary...")
+            user.full_name = "Local Developer"
+            user.role = "developer"
+            user.hashed_password = hash_password("password")
+            user.auth_provider = "email"
             db.commit()
+        else:
+            print("Seeding fresh default developer user in development...")
+            new_user = models.User(
+                email="local_user@example.com",
+                full_name="Local Developer",
+                auth_provider="email",
+                role="developer",
+                hashed_password=hash_password("password")
+            )
+            db.add(new_user)
+            db.commit()
+            db.refresh(new_user)
             
-        print("Seeding fresh default developer user in development...")
-        new_user = models.User(
-            email="local_user@example.com",
-            full_name="Local Developer",
-            auth_provider="email",
-            role="developer",
-            hashed_password=hash_password("password")
-        )
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-        
-        # Seed default settings
-        settings = models.UserSettings(user_id=new_user.id)
-        db.add(settings)
-        db.commit()
-        print("Default developer user and settings seeded successfully.")
+            # Seed default settings
+            settings = models.UserSettings(user_id=new_user.id)
+            db.add(settings)
+            db.commit()
+            print("Default developer user and settings seeded successfully.")
     except Exception as e:
         print(f"Warning: Failed to seed default user: {e}")
     finally:

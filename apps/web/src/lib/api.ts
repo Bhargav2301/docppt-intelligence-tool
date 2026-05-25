@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://docppt-backend.onrender.com";
 
 /**
  * Custom error class for API failures
@@ -264,21 +264,13 @@ export const PptAPI = {
     sessionId: string,
     modifications: CompileModification[]
   ): Promise<Blob> {
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
     const form = new FormData();
     form.append("modifications", JSON.stringify(modifications));
 
-    const res = await fetch(`${API_BASE}/api/ppt/compile_session/${sessionId}`, {
+    return apiFetch<Blob>(`/api/ppt/compile_session/${sessionId}`, {
       method: "POST",
       body: form,
     });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new ApiError(res.status, err.detail || "Compilation failed");
-    }
-
-    return res.blob();
   },
 };
 

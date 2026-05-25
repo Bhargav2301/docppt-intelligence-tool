@@ -62,8 +62,8 @@ def get_current_user(
     env = os.getenv("ENV", "development")
 
     if not token:
-        # If in development environment, fallback to default local developer user
-        if env == "development" or env == "local_dev" or not os.getenv("ENV"):
+        # If in local dev environment, fallback to default local developer user
+        if env in ("local_dev", "development"):
             local_user = db.query(User).filter(User.email == "local_user@example.com").first()
             if local_user:
                 return local_user

@@ -61,6 +61,7 @@ from sqlalchemy.orm import Session as DBSession
 from fastapi import Depends
 from database import get_db
 from models import Session, User, DocOutput, File
+from routers.auth import get_current_user
 from datetime import datetime
 import os
 from analysis.doc_summarizer import generate_structured_summary, extract_product_description
@@ -200,16 +201,13 @@ async def process_document(
     file: Optional[UploadFile] = None,
     url: Optional[str] = Form(None),
     text: Optional[str] = Form(None),
-    db: DBSession = Depends(get_db)
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Synchronous full processing: Creates a DB session, extracts text,
     runs analysis, persists results to DB, and returns the whole payload.
     """
-    user = db.query(User).filter(User.email == "local_user@example.com").first()
-    if not user:
-        raise HTTPException(status_code=500, detail="Default local user not found.")
-
     file_bytes = None
     filename = None
     if file:
@@ -220,7 +218,7 @@ async def process_document(
 
     res = await process_single_doc_internal(
         db=db,
-        user_id=user.id,
+        user_id=current_user.id,
         file_bytes=file_bytes,
         filename=filename,
         url=url,
@@ -258,16 +256,13 @@ async def batch_process_document(
     files: Optional[List[UploadFile]] = None,
     urls: Optional[str] = Form(None),   # JSON-serialized list of URLs or objects {"url": "...", "label": "..."}
     texts: Optional[str] = Form(None),  # JSON-serialized list of objects {"text": "...", "label": "..."}
-    db: DBSession = Depends(get_db)
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Processes multiple documents in a single user action.
     Returns an array of session statuses.
     """
-    user = db.query(User).filter(User.email == "local_user@example.com").first()
-    if not user:
-        raise HTTPException(status_code=500, detail="Default local user not found.")
-
     results = []
 
     # 1. Process files
@@ -285,7 +280,7 @@ async def batch_process_document(
                 file_bytes = await file.read()
                 res = await process_single_doc_internal(
                     db=db,
-                    user_id=user.id,
+                    user_id=current_user.id,
                     file_bytes=file_bytes,
                     filename=file.filename
                 )
@@ -328,7 +323,7 @@ async def batch_process_document(
             try:
                 res = await process_single_doc_internal(
                     db=db,
-                    user_id=user.id,
+                    user_id=current_user.id,
                     url=url_str,
                     label=label_str
                 )
@@ -371,7 +366,7 @@ async def batch_process_document(
             try:
                 res = await process_single_doc_internal(
                     db=db,
-                    user_id=user.id,
+                    user_id=current_user.id,
                     text=text_str,
                     label=label_str
                 )

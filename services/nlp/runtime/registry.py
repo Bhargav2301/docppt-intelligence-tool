@@ -13,22 +13,25 @@ class ModelRegistry:
 
     @classmethod
     def _get_active_mode(cls) -> str:
-        try:
-            from database import SessionLocal
-            from models import User, UserSettings
-            db = SessionLocal()
+        import os
+        env = os.getenv("ENV", "development")
+        if env in ("local_dev", "development"):
             try:
-                user = db.query(User).filter(User.email == "local_user@example.com").first()
-                if user:
-                    settings = db.query(UserSettings).filter(UserSettings.user_id == user.id).first()
-                    if settings and settings.model_mode:
-                        return settings.model_mode
+                from database import SessionLocal
+                from models import User, UserSettings
+                db = SessionLocal()
+                try:
+                    user = db.query(User).filter(User.email == "local_user@example.com").first()
+                    if user:
+                        settings = db.query(UserSettings).filter(UserSettings.user_id == user.id).first()
+                        if settings and settings.model_mode:
+                            return settings.model_mode
+                except Exception:
+                    pass
+                finally:
+                    db.close()
             except Exception:
                 pass
-            finally:
-                db.close()
-        except Exception:
-            pass
         return MODEL_MODE
 
     @classmethod

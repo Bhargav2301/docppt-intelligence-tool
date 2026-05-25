@@ -29,8 +29,6 @@ services:
     dockerContext: apps/web
     dockerfilePath: apps/web/Dockerfile
     plan: free
-    dockerBuildArgs:
-      NEXT_PUBLIC_API_BASE_URL: https://docppt-backend.onrender.com
     envVars:
       - key: NODE_ENV
         value: production

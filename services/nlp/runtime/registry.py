@@ -14,8 +14,8 @@ class ModelRegistry:
     @classmethod
     def _get_active_mode(cls) -> str:
         import os
-        env = os.getenv("ENV", "development")
-        if env in ("local_dev", "development"):
+        env = os.getenv("ENV", "production")
+        if env == "local_dev":
             try:
                 from database import SessionLocal
                 from models import User, UserSettings

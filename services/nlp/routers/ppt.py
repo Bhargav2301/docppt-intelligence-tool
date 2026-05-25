@@ -17,6 +17,7 @@ from analysis.artifact_detector import detect_artifacts
 from analysis.rewriter import generate_rewrite
 from analysis.evaluator import calculate_similarity, calculate_perplexity
 from runtime.config import REWRITE_MAX_EXPANSION, HALLUCINATION_SIMILARITY_THRESHOLD
+from runtime.upload_guard import validate_upload
 from database import get_db
 from models import Session, User, PptOutput, PptSegment, File as DbFile
 from routers.auth import get_current_user
@@ -33,11 +34,9 @@ async def extract_presentation(file: UploadFile = File(...)):
     Extracts text from a .pptx file, preserving precise location metadata 
     (slide, shape, paragraph, and run indices) for future reconstruction.
     """
-    if not file.filename.endswith(".pptx"):
-        raise HTTPException(status_code=400, detail="Only .pptx files are supported.")
-        
     try:
         file_bytes = await file.read()
+        validate_upload(file, file_bytes, "pptx")
         extracted_data = extract_ppt_text(file_bytes)
         return extracted_data
     except ValueError as e:
@@ -55,15 +54,13 @@ async def compile_presentation(
     applies the text replacements at the precise run level, and returns
     the modified .pptx file as a binary stream.
     """
-    if not file.filename.endswith(".pptx"):
-        raise HTTPException(status_code=400, detail="Only .pptx files are supported.")
-        
     try:
         mods_list = json.loads(modifications)
         if not isinstance(mods_list, list):
             raise ValueError("Modifications must be a JSON array.")
-            
+
         file_bytes = await file.read()
+        validate_upload(file, file_bytes, "pptx")
         compiled_bytes = compile_ppt(file_bytes, mods_list)
         
         return StreamingResponse(
@@ -325,11 +322,9 @@ async def process_presentation(
     """
     Pipeline for a single presentation.
     """
-    if not file.filename.endswith(".pptx"):
-        raise HTTPException(status_code=400, detail="Only .pptx files are supported.")
-    
     try:
         file_bytes = await file.read()
+        validate_upload(file, file_bytes, "pptx")
         return await process_single_ppt_internal(
             file_bytes=file_bytes,
             filename=file.filename,
@@ -354,17 +349,9 @@ async def batch_process_presentation(
     results = []
     
     for file in files:
-        if not file.filename.endswith(".pptx"):
-            results.append(BatchPptItemResponse(
-                session_id="",
-                filename=file.filename,
-                status="failed",
-                error="Only .pptx files are supported."
-            ))
-            continue
-            
         try:
             file_bytes = await file.read()
+            validate_upload(file, file_bytes, "pptx")
             res = await process_single_ppt_internal(
                 file_bytes=file_bytes,
                 filename=file.filename,

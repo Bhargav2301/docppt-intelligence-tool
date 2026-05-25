@@ -28,10 +28,10 @@ def run_migrations():
                 conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR DEFAULT 'user'"))
 
 def seed_default_user():
-    # Only seed default user in non-production environments
-    env = os.getenv("ENV", "development")
-    if env == "production":
-        print("Production environment detected. Skipping default developer user seeding.")
+    # Only seed default developer user when ENV is explicitly local_dev. Never in production or default.
+    env = os.getenv("ENV", "production")
+    if env != "local_dev":
+        print(f"ENV={env}: Skipping default developer user seeding.")
         return
         
     from database import SessionLocal

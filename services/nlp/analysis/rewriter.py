@@ -42,8 +42,8 @@ def generate_rewrite(
                 if sess_record:
                     user = db.query(User).filter(User.id == sess_record.user_id).first()
             
-            # Fall back to default developer user if session user not resolved and ENV is local_dev or development
-            if not user and os.getenv("ENV") in ("local_dev", "development"):
+            # Dev-only fallback: only when ENV is explicitly local_dev. Never in production.
+            if not user and os.getenv("ENV") == "local_dev":
                 user = db.query(User).filter(User.email == "local_user@example.com").first()
                 
             if user:

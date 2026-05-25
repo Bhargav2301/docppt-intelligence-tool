@@ -127,7 +127,7 @@ export default function LoginPage() {
           </div>
         </form>
 
-        {process.env.NODE_ENV !== "production" && (
+        {process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ENABLE_DEV_BYPASS === "true" && (
           <>
             <div className="relative flex items-center justify-center my-4">
               <div className="border-t border-[var(--border-subtle)] w-full absolute" />

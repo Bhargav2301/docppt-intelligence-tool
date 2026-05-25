@@ -5,6 +5,7 @@ from typing import Optional
 from extraction.docx_parser import extract_from_docx
 from extraction.google_docs import extract_from_google_doc
 from extraction.text_normalizer import normalize_text
+from runtime.upload_guard import validate_upload
 
 router = APIRouter(prefix="/api/doc", tags=["doc"])
 
@@ -26,9 +27,8 @@ async def extract_document(
     source_type = "unknown"
 
     if file:
-        if not file.filename.endswith(".docx"):
-            raise HTTPException(status_code=400, detail="Only .docx files are supported for file upload.")
         file_bytes = await file.read()
+        validate_upload(file, file_bytes, "docx")
         extracted = extract_from_docx(file_bytes)
         source_type = "docx"
     elif url:
@@ -211,9 +211,8 @@ async def process_document(
     file_bytes = None
     filename = None
     if file:
-        if not file.filename.endswith(".docx"):
-            raise HTTPException(status_code=400, detail="Only .docx supported.")
         file_bytes = await file.read()
+        validate_upload(file, file_bytes, "docx")
         filename = file.filename
 
     res = await process_single_doc_internal(
@@ -268,16 +267,9 @@ async def batch_process_document(
     # 1. Process files
     if files:
         for file in files:
-            if not file.filename.endswith(".docx"):
-                results.append(BatchDocItemResponse(
-                    session_id="",
-                    input_label=file.filename,
-                    status="failed_final",
-                    error_message="Only .docx files are supported."
-                ))
-                continue
             try:
                 file_bytes = await file.read()
+                validate_upload(file, file_bytes, "docx")
                 res = await process_single_doc_internal(
                     db=db,
                     user_id=current_user.id,

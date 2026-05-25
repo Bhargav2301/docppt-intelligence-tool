@@ -59,11 +59,11 @@ def get_current_user(
         # Fallback for internal microservice calls
         token = x_auth_token
 
-    env = os.getenv("ENV", "development")
+    env = os.getenv("ENV", "production")
 
     if not token:
-        # If in local dev environment, fallback to default local developer user
-        if env in ("local_dev", "development"):
+        # Dev-only fallback: only when ENV is explicitly local_dev. Never in production or default.
+        if env == "local_dev":
             local_user = db.query(User).filter(User.email == "local_user@example.com").first()
             if local_user:
                 return local_user

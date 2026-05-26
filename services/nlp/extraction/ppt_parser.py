@@ -2,13 +2,16 @@ import io
 from pptx import Presentation
 from typing import Dict, Any, List
 
-def extract_ppt_text(file_bytes: bytes) -> Dict[str, Any]:
+def extract_ppt_text(file_source) -> Dict[str, Any]:
     """
-    Parses a PPTX file from bytes and extracts all text down to the run level.
+    Parses a PPTX file from bytes or file path and extracts all text down to the run level.
     Returns a dictionary mapping exactly to the ppt_text_segments schema requirements.
     """
     try:
-        prs = Presentation(io.BytesIO(file_bytes))
+        if isinstance(file_source, bytes):
+            prs = Presentation(io.BytesIO(file_source))
+        else:
+            prs = Presentation(file_source)
     except Exception as e:
         raise ValueError(f"Failed to parse PPTX file: {str(e)}")
 

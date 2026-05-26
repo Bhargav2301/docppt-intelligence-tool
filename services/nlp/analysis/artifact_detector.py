@@ -91,3 +91,41 @@ def detect_artifacts(text: str, paragraph_context: str = "") -> List[Dict[str, A
             })
 
     return flags
+
+
+def clean_text_by_rules(text: str, flags: List[Dict[str, Any]]) -> str:
+    """
+    Surgically cleans mechanical artifacts from the text based on detected flags.
+    Saves RAM by doing rule-based cleaning on the CPU instead of using an LLM.
+    """
+    if not text or not flags:
+        return text
+
+    cleaned = text
+
+    # Sort flags by length of matched_text descending to replace longer sequences first
+    sorted_flags = sorted(flags, key=lambda x: len(x.get("matched_text", "")), reverse=True)
+
+    for flag in sorted_flags:
+        matched = flag.get("matched_text")
+        if not matched:
+            continue
+
+        flag_type = flag.get("type")
+
+        if flag_type in ("citation_artifact", "delimiter_artifact", "url_artifact"):
+            cleaned = cleaned.replace(matched, "")
+        elif flag_type == "markdown_residue":
+            inner = matched
+            if inner.startswith("**") and inner.endswith("**"):
+                inner = inner[2:-2]
+            elif inner.startswith("_") and inner.endswith("_"):
+                inner = inner[1:-1]
+            elif inner.startswith("`") and inner.endswith("`"):
+                inner = inner[1:-1]
+            cleaned = cleaned.replace(matched, inner)
+
+    # Collapse multiple spaces and trim
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+

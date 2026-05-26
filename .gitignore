@@ -32,3 +32,5 @@ Thumbs.db
 *.db
 docppt.db
 
+# Uploads
+services/nlp/uploads/

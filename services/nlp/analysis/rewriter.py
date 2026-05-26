@@ -56,8 +56,11 @@ def generate_rewrite(
             logger.error(f"Error reading DB settings: {str(e)}")
 
     if mode == "extractive_only":
-        logger.info("Skipping rewrite generation because MODEL_MODE is extractive_only.")
-        return None
+        logger.info("Using rule-based fallback clean because MODEL_MODE is extractive_only.")
+        from .artifact_detector import detect_artifacts, clean_text_by_rules
+        flags = detect_artifacts(text)
+        return clean_text_by_rules(text, flags)
+
 
     start_time = time.time()
     status = "success"
@@ -141,7 +144,10 @@ def generate_rewrite(
                 status = "failed"
             err_code = "LOCAL_MODEL_LOAD_ERROR"
             err_msg = str(load_err)
-            logger.error(f"Failed to load instruction model: {str(load_err)}")
+    if rewritten is None:
+        from .artifact_detector import detect_artifacts, clean_text_by_rules
+        flags = detect_artifacts(text)
+        rewritten = clean_text_by_rules(text, flags)
 
     duration_ms = int((time.time() - start_time) * 1000)
 

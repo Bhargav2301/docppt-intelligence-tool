@@ -133,7 +133,7 @@ class BatchPptItemResponse(BaseModel):
     error: Optional[str] = None
 
 async def process_single_ppt_internal(
-    file_bytes: bytes,
+    file_path: str,
     filename: str,
     sensitivity: str,
     db: DBSession,
@@ -161,10 +161,10 @@ async def process_single_ppt_internal(
         
         # Save original .pptx to disk for later compilation
         pptx_path = os.path.join(PPT_UPLOAD_DIR, f"{db_session.id}.pptx")
-        with open(pptx_path, "wb") as f:
-            f.write(file_bytes)
+        import shutil
+        shutil.copy2(file_path, pptx_path)
         
-        extracted_data = extract_ppt_text(file_bytes)
+        extracted_data = extract_ppt_text(pptx_path)
         
         # 3. Detect artifacts
         db_session.status = "analyzing"
@@ -208,7 +208,8 @@ async def process_single_ppt_internal(
                 
                 # Conservative: only strip artifacts, no generative rewrite
                 if sensitivity == "conservative":
-                    seg["final_text"] = original
+                    from analysis.artifact_detector import clean_text_by_rules
+                    seg["final_text"] = clean_text_by_rules(original, flags)
                     seg["decision"] = "pending"
                     continue
                 
@@ -288,7 +289,7 @@ async def process_single_ppt_internal(
             storage_path=pptx_path,
             original_filename=filename,
             mime_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            size_bytes=len(file_bytes)
+            size_bytes=os.path.getsize(pptx_path)
         )
         db.add(db_file)
         db.commit()
@@ -312,6 +313,70 @@ async def process_single_ppt_internal(
         db.commit()
         raise e
 
+import tempfile
+
+async def save_upload_file_tmp(upload_file: UploadFile) -> str:
+    from runtime.upload_guard import MAX_UPLOAD_BYTES, _OOXML_MAGIC, _ALLOWED
+    spec = _ALLOWED.get("pptx")
+    if spec is None:
+        raise HTTPException(status_code=500, detail="Unknown upload kind: pptx")
+
+    filename = (upload_file.filename or "").lower()
+    if not filename.endswith(spec["extensions"]):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only {', '.join(spec['extensions'])} files are supported.",
+        )
+
+    try:
+        suffix = os.path.splitext(upload_file.filename)[1]
+        fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+        total_size = 0
+        is_first_chunk = True
+
+        with os.fdopen(fd, "wb") as tmp_file:
+            while True:
+                chunk = await upload_file.read(65536)
+                if not chunk:
+                    break
+
+                if is_first_chunk:
+                    is_first_chunk = False
+                    if not chunk.startswith(_OOXML_MAGIC):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="File does not look like a valid OOXML (.docx/.pptx) archive.",
+                        )
+
+                total_size += len(chunk)
+                if total_size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File too large: {total_size} bytes exceeds {MAX_UPLOAD_BYTES} bytes.",
+                    )
+                tmp_file.write(chunk)
+
+        if total_size == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+        return tmp_path
+    except HTTPException:
+        if 'tmp_path' in locals() and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        raise
+    except Exception as e:
+        if 'tmp_path' in locals() and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"Failed to process uploaded file: {str(e)}")
+    finally:
+        await upload_file.close()
+
 @router.post("/process")
 async def process_presentation(
     file: UploadFile = File(...),
@@ -322,11 +387,10 @@ async def process_presentation(
     """
     Pipeline for a single presentation.
     """
+    tmp_path = await save_upload_file_tmp(file)
     try:
-        file_bytes = await file.read()
-        validate_upload(file, file_bytes, "pptx")
         return await process_single_ppt_internal(
-            file_bytes=file_bytes,
+            file_path=tmp_path,
             filename=file.filename,
             sensitivity=sensitivity,
             db=db,
@@ -334,6 +398,12 @@ async def process_presentation(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
 @router.post("/batch-process", response_model=List[BatchPptItemResponse])
 async def batch_process_presentation(
@@ -350,10 +420,20 @@ async def batch_process_presentation(
     
     for file in files:
         try:
-            file_bytes = await file.read()
-            validate_upload(file, file_bytes, "pptx")
+            tmp_path = await save_upload_file_tmp(file)
+        except Exception as e:
+            logger.error(f"Failed validation/saving for batch item {file.filename}: {str(e)}")
+            results.append(BatchPptItemResponse(
+                session_id="",
+                filename=file.filename,
+                status="failed",
+                error=str(e)
+            ))
+            continue
+
+        try:
             res = await process_single_ppt_internal(
-                file_bytes=file_bytes,
+                file_path=tmp_path,
                 filename=file.filename,
                 sensitivity=sensitivity,
                 db=db,
@@ -365,9 +445,8 @@ async def batch_process_presentation(
                 filename=file.filename,
                 status="completed",
                 total_slides=res["data"].get("total_slides", 0),
-                total_flags=res["session"].get("total_flags", 0) # fallbacks to 0 if not set, or we can fetch total flags from the output
+                total_flags=0
             ))
-            # Let's dynamically fix total_flags by computing from res
             results[-1].total_flags = sum(
                 len(seg.get("flags", [])) 
                 for slide in res["data"].get("slides", []) 
@@ -381,6 +460,13 @@ async def batch_process_presentation(
                 status="failed",
                 error=str(e)
             ))
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
             
     return results
+
 

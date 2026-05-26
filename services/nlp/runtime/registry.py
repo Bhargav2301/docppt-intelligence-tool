@@ -56,6 +56,9 @@ class ModelRegistry:
 
     @classmethod
     def get_summarization_pipeline(cls):
+        import os
+        if os.getenv("ENV") == "production":
+            raise RuntimeError("Local model loading is disabled in production to prevent OOM.")
         cache_key = f"summarization_{SUMMARIZATION_MODEL}"
         if cache_key not in cls._cache:
             logger.info(f"Loading summarization model: {SUMMARIZATION_MODEL}")
@@ -67,6 +70,9 @@ class ModelRegistry:
 
     @classmethod
     def get_embedding_model(cls):
+        import os
+        if os.getenv("ENV") == "production":
+            raise RuntimeError("Local model loading is disabled in production to prevent OOM.")
         cache_key = f"embedding_{EMBEDDING_MODEL}"
         if cache_key not in cls._cache:
             logger.info(f"Loading embedding model: {EMBEDDING_MODEL}")
@@ -78,6 +84,9 @@ class ModelRegistry:
 
     @classmethod
     def get_instruction_model(cls):
+        import os
+        if os.getenv("ENV") == "production":
+            raise RuntimeError("Local model loading is disabled in production to prevent OOM.")
         cache_key = f"instruction_{INSTRUCTION_MODEL}"
         if cache_key not in cls._cache:
             logger.info(f"Loading instruction model: {INSTRUCTION_MODEL}")
@@ -89,6 +98,9 @@ class ModelRegistry:
 
     @classmethod
     def get_perplexity_model(cls):
+        import os
+        if os.getenv("ENV") == "production":
+            raise RuntimeError("Local model loading is disabled in production to prevent OOM.")
         cache_key = f"perplexity_{PERPLEXITY_MODEL}"
         if cache_key not in cls._cache:
             logger.info(f"Loading perplexity model: {PERPLEXITY_MODEL}")

@@ -23,6 +23,7 @@ class SessionResponse(BaseModel):
     input_type: str
     input_label: Optional[str] = None
     status: str
+    error_message: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
     
@@ -56,6 +57,7 @@ def get_recent_sessions(limit: int = 20, db: DBSession = Depends(get_db), curren
             input_type=s.input_type,
             input_label=s.input_label or (f"Untitled {s.session_type.upper()}"),
             status=s.status,
+            error_message=s.error_message,
             created_at=s.created_at,
             completed_at=s.completed_at,
             metrics=metrics
@@ -132,10 +134,35 @@ def get_session_detail(session_id: uuid.UUID, db: DBSession = Depends(get_db), c
                     "final_text": seg.final_text,
                     "decision": seg.decision,
                 })
+            
+            # Compute AI likeness score per slide
+            slide_scores: dict = {}
+            for si, seg_list in slides_map.items():
+                total_segs = len(seg_list)
+                if total_segs == 0:
+                    slide_scores[str(si)] = 0
+                    continue
+                total_weight = 0.0
+                for s in seg_list:
+                    flags = s.get("flags") or []
+                    max_seg_weight = 0.0
+                    for flag in flags:
+                        sev = flag.get("severity", "low").lower()
+                        if sev == "high":
+                            max_seg_weight = max(max_seg_weight, 1.0)
+                        elif sev == "medium":
+                            max_seg_weight = max(max_seg_weight, 0.5)
+                        else:
+                            max_seg_weight = max(max_seg_weight, 0.25)
+                    total_weight += max_seg_weight
+                score = min(100, int(round((total_weight / total_segs) * 100)))
+                slide_scores[str(si)] = score
+
             result["output"] = {
                 "total_slides": ppt_out.total_slides,
                 "total_flags": ppt_out.total_flags,
                 "slides": slides_map,
+                "slide_scores": slide_scores,
             }
 
     return result

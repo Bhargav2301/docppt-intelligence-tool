@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { TelemetryAPI, TelemetryEvent, UserProfile } from "@/lib/api";
+import { TelemetryAPI, TelemetryEvent, UserProfile, AuthAPI } from "@/lib/api";
 import { ShieldAlert, RefreshCw, ChevronDown, ChevronUp, Search, Calendar, BarChart2, Filter } from "lucide-react";
 
 export default function DevDashboardPage() {
@@ -20,21 +20,18 @@ export default function DevDashboardPage() {
   const [routeFilter, setRouteFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
 
-  const checkDevAccess = () => {
-    const userStr = localStorage.getItem("docppt_user");
-    if (!userStr) {
-      router.push("/auth/login");
-      return;
-    }
+  const verifyAccess = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const parsedUser = JSON.parse(userStr) as UserProfile;
-      setUser(parsedUser);
-      if (parsedUser.role !== "developer") {
+      const profile = await AuthAPI.getMe();
+      setUser(profile);
+      if (profile.role !== "developer") {
         setLoading(false);
       } else {
-        fetchEvents();
+        await fetchEvents();
       }
-    } catch (e) {
+    } catch (err: any) {
       router.push("/auth/login");
     }
   };
@@ -54,7 +51,7 @@ export default function DevDashboardPage() {
   };
 
   useEffect(() => {
-    checkDevAccess();
+    verifyAccess();
   }, [page]);
 
   const toggleRow = (id: string) => {

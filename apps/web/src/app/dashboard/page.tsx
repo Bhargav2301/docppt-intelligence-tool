@@ -129,6 +129,11 @@ export default function Dashboard() {
                           </>
                         )}
                       </div>
+                      {session.status === 'failed_final' && session.error_message && (
+                        <p className="text-xs text-red-500 mt-1.5 italic font-medium bg-red-500/5 px-2.5 py-1.5 rounded-lg border border-red-500/10 max-w-[500px] break-words">
+                          Error: {session.error_message}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

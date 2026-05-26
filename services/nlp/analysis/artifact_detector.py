@@ -57,7 +57,7 @@ def detect_artifacts(text: str, paragraph_context: str = "") -> List[Dict[str, A
         r'={4,}',
         r'-{4,}',
         r'\*{3,}',
-        r'<+|>+'
+        r'<{2,}|>{2,}'
     ]
     for pattern in noise_patterns:
         for match in re.finditer(pattern, text):
@@ -77,17 +77,48 @@ def detect_artifacts(text: str, paragraph_context: str = "") -> List[Dict[str, A
         context_to_search = paragraph_context if paragraph_context else text
         context_lower = context_to_search.lower()
         
-        anchors = ["see", "reference", "for more details", "url:", "link:", "resource:", "attached here", "specified on this slide"]
+        # Keep simple domain-only links (e.g. www.absolinsoft.com) as branding, not artifacts
+        url_without_scheme = url_text.replace("https://", "").replace("http://", "")
+        parts = url_without_scheme.split('/')
+        is_simple_domain = len(parts) <= 1 or (len(parts) == 2 and parts[1] == "")
+        
+        anchors = [
+            "see", "reference", "for more details", "url:", "link:", 
+            "resource:", "attached here", "specified on this slide",
+            "visit", "contact", "website", "sales", "email"
+        ]
         
         has_anchor = any(anchor in context_lower for anchor in anchors)
         
-        if not has_anchor:
+        if not has_anchor and not is_simple_domain:
             flags.append({
                 "type": "url_artifact",
                 "severity": "medium",
                 "matched_text": url_text,
                 "explanation": "Raw/bare URL likely pasted from an AI tool or browser without context.",
                 "recommendation": "Remove this raw URL or replace it with a shorter descriptor or a proper reference note."
+            })
+
+    # 5. Placeholder / Instruction Text
+    placeholder_patterns = [
+        r'\[\s*insert\s*.*?\]',
+        r'\{\s*insert\s*.*?\}',
+        r'<\s*insert\s*.*?>',
+        r'\bTODO\b',
+        r'\bTBD\b',
+        r'\bplaceholder\b',
+        r'\blorem\s+ipsum\b',
+        r'\breplace\s+(?:this|these|with)\b',
+        r'\byour\s+company\s+here\b'
+    ]
+    for pattern in placeholder_patterns:
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            flags.append({
+                "type": "placeholder_text",
+                "severity": "high",
+                "matched_text": match.group(0),
+                "explanation": "Placeholder or instruction text detected.",
+                "recommendation": "Replace this placeholder with real content before presenting."
             })
 
     return flags

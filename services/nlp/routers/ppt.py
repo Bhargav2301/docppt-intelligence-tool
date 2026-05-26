@@ -253,6 +253,20 @@ async def process_single_ppt_internal(
         db_session.status = "completed"
         db_session.completed_at = datetime.utcnow()
         
+        # Post-process: if final_text is identical to original_text, clear flags and set decision to no_change
+        cleaned_total_flags = 0
+        for slide in extracted_data.get("slides", []):
+            for seg in slide.get("segments", []):
+                original = seg.get("original_text", "")
+                final = seg.get("final_text", original)
+                if final == original:
+                    seg["flags"] = []
+                    seg["decision"] = "no_change"
+                    seg["final_text"] = original
+                else:
+                    cleaned_total_flags += len(seg.get("flags", []))
+        total_flags = cleaned_total_flags
+
         ppt_output = PptOutput(
             session_id=db_session.id,
             total_slides=extracted_data.get("total_slides", 0),

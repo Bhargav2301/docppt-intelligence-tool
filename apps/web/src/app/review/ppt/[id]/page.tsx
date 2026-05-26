@@ -41,6 +41,7 @@ export default function PPTReview({
   const [totalSlides, setTotalSlides] = useState(0);
   const [totalFlags, setTotalFlags] = useState(0);
   const [slides, setSlides] = useState<Record<string, SegmentState[]>>({});
+  const [slideScores, setSlideScores] = useState<Record<string, number>>({});
   const [activeSlide, setActiveSlide] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
   const [editingSegId, setEditingSegId] = useState<string | null>(null);
@@ -53,6 +54,7 @@ export default function PPTReview({
           const pptOut = res.output as any;
           setTotalSlides(pptOut.total_slides || 0);
           setTotalFlags(pptOut.total_flags || 0);
+          setSlideScores(pptOut.slide_scores || {});
 
           const slidesMap: Record<string, SegmentState[]> = {};
           const rawSlides = pptOut.slides || {};
@@ -260,6 +262,7 @@ export default function PPTReview({
           <div className="p-1.5 space-y-0.5">
             {slideKeys.map((key) => {
               const segs = slides[key];
+              const score = slideScores[key] || 0;
               const flagCount = segs.filter(
                 (s) => s.flags && s.flags.length > 0
               ).length;
@@ -285,13 +288,19 @@ export default function PPTReview({
                     Slide {Number(key) + 1}
                   </span>
                   <div className="flex items-center gap-1.5">
+                    {score > 0 && (
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        score > 50 
+                          ? "bg-red-500/10 text-red-500 border border-red-500/20"
+                          : score > 20
+                            ? "bg-yellow-500/10 text-yellow-600 border border-yellow-500/20"
+                            : "bg-blue-500/10 text-blue-500 border border-blue-500/20"
+                      }`}>
+                        {score}%
+                      </span>
+                    )}
                     {pendCount > 0 && (
                       <span className="w-2 h-2 rounded-full bg-[var(--warning)]" />
-                    )}
-                    {flagCount > 0 && (
-                      <span className="text-xs text-[var(--text-muted)]">
-                        {flagCount}
-                      </span>
                     )}
                   </div>
                 </button>

@@ -25,10 +25,14 @@ def detect_artifacts(text: str, paragraph_context: str = "") -> List[Dict[str, A
     ]
     for pattern in citation_patterns:
         for match in re.finditer(pattern, text, re.IGNORECASE):
+            matched_text = match.group(0)
+            # Whitelist "Source: ABSOLIN"
+            if matched_text.lower() == "source:" and re.search(r'source:\s*ABSOLIN', text, re.IGNORECASE):
+                continue
             flags.append({
                 "type": "citation_artifact",
                 "severity": "high",
-                "matched_text": match.group(0),
+                "matched_text": matched_text,
                 "explanation": "Citation marker or placeholder appears to be leftover copied text.",
                 "recommendation": "Remove the marker or replace it with a real citation."
             })
@@ -117,6 +121,32 @@ def detect_artifacts(text: str, paragraph_context: str = "") -> List[Dict[str, A
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": match.group(0),
+                "explanation": "Placeholder or instruction text detected.",
+                "recommendation": "Replace this placeholder with real content before presenting."
+            })
+
+    # Case-sensitive bracketed placeholders (starts with Uppercase letter, e.g. [City], [X%], [N])
+    # Excluding simple digits (handled by citation_patterns)
+    bracket_pattern_cs = r'\[\s*[A-Z][A-Za-z0-9\s/%_&,\-\u2014\u2013]*\s*\]'
+    for match in re.finditer(bracket_pattern_cs, text):
+        flags.append({
+            "type": "placeholder_text",
+            "severity": "high",
+            "matched_text": match.group(0),
+            "explanation": "Placeholder or instruction text detected.",
+            "recommendation": "Replace this placeholder with real content before presenting."
+        })
+
+    # Case-insensitive bracketed placeholders for specific lowercase/mixed keywords
+    bracket_pattern_ci = r'\[\s*(?:city|region|country|company|client|prospect|date|value|percent|amount|n|x|y|a|b|insert|replace|todo|tbd)\b[^\]]*\]'
+    for match in re.finditer(bracket_pattern_ci, text, re.IGNORECASE):
+        # Avoid duplicate flagging if already flagged by case-sensitive regex
+        matched_text = match.group(0)
+        if not any(f["matched_text"] == matched_text for f in flags):
+            flags.append({
+                "type": "placeholder_text",
+                "severity": "high",
+                "matched_text": matched_text,
                 "explanation": "Placeholder or instruction text detected.",
                 "recommendation": "Replace this placeholder with real content before presenting."
             })

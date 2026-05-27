@@ -14,6 +14,7 @@ from datetime import datetime
 from extraction.ppt_parser import extract_ppt_text
 from extraction.ppt_compiler import compile_ppt
 from analysis.artifact_detector import detect_artifacts
+from analysis.template_similarity import check_template_similarity
 from analysis.rewriter import generate_rewrite
 from analysis.evaluator import calculate_similarity, calculate_perplexity
 from runtime.config import REWRITE_MAX_EXPANSION, HALLUCINATION_SIMILARITY_THRESHOLD
@@ -191,6 +192,35 @@ async def process_single_ppt_internal(
                 if new_flags:
                     seg.setdefault("flags", []).extend(new_flags)
                     total_flags += len(new_flags)
+
+        # Cross-session template/slide similarity checks
+        try:
+            similarity_matches = check_template_similarity(
+                db, 
+                current_user.id, 
+                extracted_data.get("slides", []),
+                current_filename=filename
+            )
+            
+            for slide in extracted_data.get("slides", []):
+                slide_idx = slide.get("slide_index", 0)
+                if slide_idx in similarity_matches:
+                    match = similarity_matches[slide_idx]
+                    # Append similarity warning flag to the first segment that contains text on this slide
+                    for seg in slide.get("segments", []):
+                        if seg.get("original_text", "").strip():
+                            sim_flag = {
+                                "type": "template_similarity_risk",
+                                "severity": "medium",
+                                "matched_text": seg.get("original_text", ""),
+                                "explanation": f"This slide matches a template previously used in '{match['matched_filename']}' (Slide {match['matched_slide_idx'] + 1}).",
+                                "recommendation": "Customize this slide's content specifically for this client to avoid generic template fatigue."
+                            }
+                            seg.setdefault("flags", []).append(sim_flag)
+                            total_flags += 1
+                            break # Only flag the first non-empty segment of the slide
+        except Exception as sim_err:
+            logger.error(f"Error executing template similarity check: {str(sim_err)}")
         
         # 4. Rewrite flagged segments
         db_session.status = "rewriting"
@@ -253,18 +283,21 @@ async def process_single_ppt_internal(
         db_session.status = "completed"
         db_session.completed_at = datetime.utcnow()
         
-        # Post-process: if final_text is identical to original_text, clear flags and set decision to no_change
+        # Post-process: if final_text is identical to original_text, keep flags and set to pending if flags exist.
         cleaned_total_flags = 0
         for slide in extracted_data.get("slides", []):
             for seg in slide.get("segments", []):
                 original = seg.get("original_text", "")
                 final = seg.get("final_text", original)
-                if final == original:
+                flags = seg.get("flags", [])
+                if final == original and not flags:
                     seg["flags"] = []
                     seg["decision"] = "no_change"
                     seg["final_text"] = original
                 else:
-                    cleaned_total_flags += len(seg.get("flags", []))
+                    if flags:
+                        seg["decision"] = "pending"
+                    cleaned_total_flags += len(flags)
         total_flags = cleaned_total_flags
 
         ppt_output = PptOutput(

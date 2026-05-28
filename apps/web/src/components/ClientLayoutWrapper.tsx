@@ -178,9 +178,6 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
                   <Link href="/dashboard" className={`text-sm font-medium transition-colors ${pathname === "/dashboard" ? "text-[var(--accent)]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>
                     Dashboard
                   </Link>
-                  <Link href="/process/doc" className={`text-sm font-medium transition-colors ${pathname === "/process/doc" ? "text-[var(--accent)]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>
-                    Analyze Doc
-                  </Link>
                   <Link href="/process/ppt" className={`text-sm font-medium transition-colors ${pathname === "/process/ppt" ? "text-[var(--accent)]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>
                     Humanize PPT
                   </Link>

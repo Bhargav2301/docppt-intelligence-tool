@@ -76,10 +76,14 @@ class ModelRegistry:
         cache_key = f"embedding_{EMBEDDING_MODEL}"
         if cache_key not in cls._cache:
             logger.info(f"Loading embedding model: {EMBEDDING_MODEL}")
-            from sentence_transformers import SentenceTransformer
-            mode = cls._get_active_mode()
-            device = cls._get_device_for_sentence_transformer(mode)
-            cls._cache[cache_key] = SentenceTransformer(EMBEDDING_MODEL, device=device)
+            try:
+                from sentence_transformers import SentenceTransformer
+                mode = cls._get_active_mode()
+                device = cls._get_device_for_sentence_transformer(mode)
+                cls._cache[cache_key] = SentenceTransformer(EMBEDDING_MODEL, device=device)
+            except Exception as e:
+                logger.error(f"Failed to load embedding model {EMBEDDING_MODEL}: {e}")
+                return None
         return cls._cache[cache_key]
 
     @classmethod
@@ -90,10 +94,14 @@ class ModelRegistry:
         cache_key = f"instruction_{INSTRUCTION_MODEL}"
         if cache_key not in cls._cache:
             logger.info(f"Loading instruction model: {INSTRUCTION_MODEL}")
-            from transformers import pipeline
-            mode = cls._get_active_mode()
-            device = cls._get_device_for_pipeline(mode)
-            cls._cache[cache_key] = pipeline("text2text-generation", model=INSTRUCTION_MODEL, device=device)
+            try:
+                from transformers import pipeline
+                mode = cls._get_active_mode()
+                device = cls._get_device_for_pipeline(mode)
+                cls._cache[cache_key] = pipeline("text2text-generation", model=INSTRUCTION_MODEL, device=device)
+            except Exception as e:
+                logger.error(f"Failed to load instruction model {INSTRUCTION_MODEL}: {e}")
+                return None
         return cls._cache[cache_key]
 
     @classmethod
@@ -104,12 +112,16 @@ class ModelRegistry:
         cache_key = f"perplexity_{PERPLEXITY_MODEL}"
         if cache_key not in cls._cache:
             logger.info(f"Loading perplexity model: {PERPLEXITY_MODEL}")
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            mode = cls._get_active_mode()
-            device = cls._get_device_for_sentence_transformer(mode)
-            tokenizer = AutoTokenizer.from_pretrained(PERPLEXITY_MODEL)
-            model = AutoModelForCausalLM.from_pretrained(PERPLEXITY_MODEL).to(device)
-            cls._cache[cache_key] = (tokenizer, model)
+            try:
+                from transformers import AutoModelForCausalLM, AutoTokenizer
+                mode = cls._get_active_mode()
+                device = cls._get_device_for_sentence_transformer(mode)
+                tokenizer = AutoTokenizer.from_pretrained(PERPLEXITY_MODEL)
+                model = AutoModelForCausalLM.from_pretrained(PERPLEXITY_MODEL).to(device)
+                cls._cache[cache_key] = (tokenizer, model)
+            except Exception as e:
+                logger.error(f"Failed to load perplexity model {PERPLEXITY_MODEL}: {e}")
+                return None
         return cls._cache[cache_key]
 
     @classmethod

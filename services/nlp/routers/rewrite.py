@@ -1,12 +1,16 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session as DBSession
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
+import logging
 
 from database import get_db
 from analysis.rewriter import generate_rewrite
 from analysis.evaluator import calculate_similarity, calculate_perplexity
 from runtime.config import REWRITE_MAX_EXPANSION, HALLUCINATION_SIMILARITY_THRESHOLD
+from runtime.crypto import decrypt_api_key
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ppt", tags=["rewrite"])
 
@@ -14,18 +18,28 @@ class RewriteRequest(BaseModel):
     original_text: str
     tone: str = "professional"
 
+from app.humanizer.editorial_rules import apply_all_editorial_rules
+from app.humanizer.constraints import check_export_safety
+
 class EvalScores(BaseModel):
     similarity_score: float
     perplexity_score: Optional[float]
     hallucination_flag: Optional[Dict[str, Any]]
+    safety: Optional[str] = None
 
 class RewriteResponse(BaseModel):
     final_text: str
     flags: List[Dict[str, Any]] = []
     eval_scores: Optional[EvalScores] = None
+    safety: Optional[str] = "safe_replace"
+    change_notes: List[str] = []
 
 @router.post("/rewrite", response_model=RewriteResponse)
-def rewrite_segment(req: RewriteRequest, db: DBSession = Depends(get_db)):
+def rewrite_segment(
+    req: RewriteRequest,
+    db: DBSession = Depends(get_db),
+    x_gemini_api_key: Optional[str] = Header(None)
+):
     """
     Generates an AI rewrite of the provided text.
     Enforces strict length constraints (discarding rewrites that overflow).
@@ -33,26 +47,47 @@ def rewrite_segment(req: RewriteRequest, db: DBSession = Depends(get_db)):
     """
     flags = []
     
+    # Decrypt API key if present
+    gemini_api_key = None
+    if x_gemini_api_key:
+        try:
+            gemini_api_key = decrypt_api_key(x_gemini_api_key)
+        except Exception as e:
+            logger.error(f"Failed to decrypt X-Gemini-API-Key: {e}")
+    
     # 1. Generate the rewrite
-    rewritten_text = generate_rewrite(req.original_text, tone=req.tone, db=db)
+    rewritten_text = generate_rewrite(
+        req.original_text,
+        tone=req.tone,
+        db=db,
+        gemini_api_key=gemini_api_key
+    )
     
     if not rewritten_text:
         # Fallback if generation fails or is disabled
-        return RewriteResponse(final_text=req.original_text, flags=[])
+        return RewriteResponse(final_text=req.original_text, flags=[], safety="safe_replace", change_notes=["No change."])
         
-    # 2. Enforce length constraint
-    len_original = len(req.original_text)
-    len_rewrite = len(rewritten_text)
+    # Apply editorial rules before any evaluation
+    rewritten_text = apply_all_editorial_rules(rewritten_text)
     
-    if len_original > 0 and len_rewrite > (REWRITE_MAX_EXPANSION * len_original):
-        # Discard rewrite
-        final_text = req.original_text
+    # 2. Enforce length constraint / check safety
+    safety_res = check_export_safety(req.original_text, rewritten_text, "body")
+    safety = safety_res.get("safety", "safe_replace")
+    
+    if safety == "needs_shorter_option":
         flags.append({
             "type": "length_overflow",
             "severity": "low",
-            "explanation": f"Proposed rewrite was {(len_rewrite/len_original - 1)*100:.1f}% longer than the original (exceeding the {REWRITE_MAX_EXPANSION*100 - 100}% limit) and was discarded to avoid overflowing the slide."
+            "explanation": "Proposed rewrite exceeded character limit and was discarded to avoid overflowing the slide."
         })
-        return RewriteResponse(final_text=final_text, flags=flags)
+        return RewriteResponse(final_text=req.original_text, flags=flags, safety=safety, change_notes=["Discarded due to layout constraints."])
+        
+    if safety == "manual_review":
+        flags.append({
+            "type": "layout_overflow_risk",
+            "severity": "medium",
+            "explanation": "Rewrite introduces potential line break or layout overflow risk."
+        })
         
     # Valid rewrite
     final_text = rewritten_text
@@ -75,11 +110,14 @@ def rewrite_segment(req: RewriteRequest, db: DBSession = Depends(get_db)):
     eval_scores = EvalScores(
         similarity_score=similarity,
         perplexity_score=perplexity_data.get("perplexity"),
-        hallucination_flag=hallucination_flag
+        hallucination_flag=hallucination_flag,
+        safety=safety
     )
     
     return RewriteResponse(
         final_text=final_text,
         flags=flags,
-        eval_scores=eval_scores
+        eval_scores=eval_scores,
+        safety=safety,
+        change_notes=["Rewritten for clarity"]
     )

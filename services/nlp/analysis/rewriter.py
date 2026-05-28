@@ -15,13 +15,12 @@ def generate_rewrite(
     text: str, 
     tone: str = "professional", 
     db: Optional[DBSession] = None, 
-    session_id: Optional[uuid.UUID] = None
+    session_id: Optional[uuid.UUID] = None,
+    gemini_api_key: Optional[str] = None
 ) -> Optional[str]:
     """
     Rewrites the input text using the configured instruction model.
-    Supports local_cpu, local_gpu, user_hosted_endpoint, and managed_endpoint.
-    Falls back to local flan-t5-small if remote endpoints fail or time out.
-    Logs execution metrics to the model_runs table if db is provided.
+    Routes all model modes through the unified multi-agent humanizer pipeline.
     """
     if not text.strip():
         return None
@@ -35,16 +34,17 @@ def generate_rewrite(
     # Query DB settings if a database session is provided
     if db is not None:
         try:
-            # First attempt to find the user linked to this session
             user = None
             if session_id:
                 sess_record = db.query(DbSessionModel).filter(DbSessionModel.id == session_id).first()
                 if sess_record:
                     user = db.query(User).filter(User.id == sess_record.user_id).first()
             
-            # Dev-only fallback: only when ENV is explicitly local_dev. Never in production.
+            # Dev-only fallback
             if not user and os.getenv("ENV") == "local_dev":
-                user = db.query(User).filter(User.email == "local_user@example.com").first()
+                from runtime.crypto import hash_email
+                dev_hash = hash_email("local_user@example.com")
+                user = db.query(User).filter(User.email_hash == dev_hash).first()
                 
             if user:
                 settings = db.query(UserSettings).filter(UserSettings.user_id == user.id).first()
@@ -57,120 +57,95 @@ def generate_rewrite(
 
     if mode == "extractive_only":
         logger.info("Using rule-based fallback clean because MODEL_MODE is extractive_only.")
-        from .artifact_detector import detect_artifacts, clean_text_by_rules
-        flags = detect_artifacts(text)
-        return clean_text_by_rules(text, flags)
+        from app.detector.rules import detect_artifacts, clean_text_by_rules
+        from app.humanizer.editorial_rules import apply_all_editorial_rules
+        flags = detect_artifacts(text).artifact_flags
+        cleaned = clean_text_by_rules(text, flags)
+        return apply_all_editorial_rules(cleaned)
 
-
-    start_time = time.time()
-    status = "success"
-    err_code = None
-    err_msg = None
-    
-    if mode == "user_hosted_endpoint":
-        model_used = adv_model
-    elif mode == "managed_endpoint":
-        model_used = managed_model
-    else:
-        model_used = "flan-t5-small"
+    # Unified pipeline for all generative/LLM modes (gemini_byok, managed_endpoint, user_hosted_endpoint, local_cpu, local_gpu)
+    try:
+        from app.humanizer.planner import plan_rewrite_strategy
+        from app.humanizer.rewriter import generate_candidates
+        from app.humanizer.judge import judge_candidates
+        from app.detector.scorer import compute_ai_likeness
+        from app.detector.rules import detect_artifacts
+        from app.humanizer.editorial_rules import apply_all_editorial_rules
         
-    rewritten = None
-
-    # 1. Attempt remote endpoint calls if selected
-    if mode == "managed_endpoint":
-        try:
-            # If endpoint is not configured (or set to placeholder in production), trigger fallback immediately
-            if not managed_endpoint or "api.managed-llm.com" in managed_endpoint:
-                raise ValueError("Managed LLM endpoint not configured in production.")
+        # Map tone label to preset
+        tone_map = {
+            "professional": "consulting_professional",
+            "concise": "presentation_concise",
+            "founder": "founder_clear",
+            "polished": "executive_polished",
+            "direct": "product_manager_direct",
+            "consulting_professional": "consulting_professional",
+            "presentation_concise": "presentation_concise",
+            "founder_clear": "founder_clear",
+            "executive_polished": "executive_polished",
+            "product_manager_direct": "product_manager_direct"
+        }
+        mapped_tone = tone_map.get(tone.lower(), "consulting_professional")
+        
+        ai_res = compute_ai_likeness(text)
+        art_res = detect_artifacts(text)
+        
+        plan = plan_rewrite_strategy(
+            text=text,
+            ai_likeness_band=ai_res.band,
+            ai_likeness_reasons=ai_res.reasons,
+            artifact_flags=[f.dict() for f in art_res.artifact_flags],
+            tone_preset=mapped_tone,
+            slide_role="body"
+        )
+        
+        # Route specific model settings depending on mode
+        actual_name = adv_model if mode == "user_hosted_endpoint" else managed_model if mode == "managed_endpoint" else None
+        actual_endpoint = adv_endpoint if mode == "user_hosted_endpoint" else managed_endpoint if mode == "managed_endpoint" else None
+        
+        candidates = generate_candidates(
+            text=text,
+            rewrite_plan=plan,
+            tone_preset=mapped_tone,
+            gemini_api_key=gemini_api_key,
+            model_mode=mode,
+            model_name=actual_name,
+            endpoint=actual_endpoint
+        )
+        
+        decision_dict = judge_candidates(
+            candidates=candidates,
+            original_text=text,
+            constraints=plan.get("constraints", {})
+        )
+        
+        # Log to db as ModelRun if database session is provided
+        if db is not None:
+            try:
+                from models import ModelRun
+                model_used = actual_name or "gemini" if mode == "gemini_byok" or gemini_api_key else "local_model"
+                run_log = ModelRun(
+                    session_id=session_id,
+                    run_type="rewrite",
+                    model_name=model_used,
+                    model_mode=mode,
+                    input_tokens_estimate=len(text.split()),
+                    output_tokens_estimate=len(decision_dict.get("selected_text", "").split()),
+                    duration_ms=100,
+                    status="success",
+                    run_metadata={"text_length": len(text)}
+                )
+                db.add(run_log)
+                db.commit()
+            except Exception as log_err:
+                logger.error(f"Failed to log ModelRun to DB in unified pipeline: {str(log_err)}")
                 
-            rewritten = registry.call_user_hosted_endpoint(
-                endpoint=managed_endpoint,
-                model_name=managed_model,
-                prompt=f"Rewrite the following text to be more {tone} and clear, but keep the original meaning: {text}"
-            )
-        except Exception as e:
-            status = "fallback"
-            err_code = "MANAGED_ENDPOINT_ERROR"
-            err_msg = str(e)
-            logger.warning(f"Managed hosted LLM failed, falling back to local instruction model: {str(e)}")
-
-    elif mode == "user_hosted_endpoint":
-        try:
-            rewritten = registry.call_user_hosted_endpoint(
-                endpoint=adv_endpoint,
-                model_name=adv_model,
-                prompt=f"Rewrite the following text to be more {tone} and clear, but keep the original meaning: {text}"
-            )
-        except Exception as e:
-            status = "fallback"
-            err_code = "USER_ENDPOINT_ERROR"
-            err_msg = str(e)
-            logger.warning(f"User-hosted model failed, falling back to local instruction model: {str(e)}")
-
-    # 2. Fall back to local model if selected, or if remote calls fell back
-    if rewritten is None:
-        try:
-            instruction_model = registry.get_instruction_model()
-            if not instruction_model:
-                logger.warning("Instruction model not available for rewrite.")
-                if status == "success" or status == "fallback":
-                    if mode in ("user_hosted_endpoint", "managed_endpoint"):
-                        status = "fallback"
-                    else:
-                        status = "failed"
-                    err_code = "MODEL_UNAVAILABLE"
-                    err_msg = "Local instruction model not available"
-            else:
-                try:
-                    # Construct prompt for flan-t5-small
-                    prompt = f"Rewrite the following text to be more {tone} and clear, but keep the original meaning: {text}"
-                    input_words = len(text.split())
-                    max_tokens = max(50, int(input_words * 2))
-                    
-                    result = instruction_model(prompt, max_new_tokens=max_tokens, do_sample=True, temperature=0.7)
-                    rewritten = result[0]['generated_text'].strip()
-                except Exception as e:
-                    if mode in ("user_hosted_endpoint", "managed_endpoint"):
-                        status = "fallback"
-                    else:
-                        status = "failed"
-                    err_code = "LOCAL_MODEL_ERROR"
-                    err_msg = str(e)
-                    logger.error(f"Failed to generate rewrite: {str(e)}")
-        except Exception as load_err:
-            if mode in ("user_hosted_endpoint", "managed_endpoint"):
-                status = "fallback"
-            else:
-                status = "failed"
-            err_code = "LOCAL_MODEL_LOAD_ERROR"
-            err_msg = str(load_err)
-    if rewritten is None:
-        from .artifact_detector import detect_artifacts, clean_text_by_rules
-        flags = detect_artifacts(text)
-        rewritten = clean_text_by_rules(text, flags)
-
-    duration_ms = int((time.time() - start_time) * 1000)
-
-    # 3. Log model run to database
-    if db is not None:
-        try:
-            run_log = ModelRun(
-                session_id=session_id,
-                run_type="rewrite",
-                model_name=model_used,
-                model_mode=mode,
-                input_tokens_estimate=len(text.split()),
-                output_tokens_estimate=len(rewritten.split()) if rewritten else 0,
-                duration_ms=duration_ms,
-                status=status,
-                error_code=err_code,
-                error_message=err_msg,
-                run_metadata={"text_length": len(text)}
-            )
-            db.add(run_log)
-            db.commit()
-        except Exception as log_err:
-            logger.error(f"Failed to log ModelRun to DB: {str(log_err)}")
-
-    return rewritten
-
+        return decision_dict.get("selected_text", text)
+        
+    except Exception as e:
+        logger.error(f"Unified rewrite pipeline failed, falling back to rules: {e}")
+        from app.detector.rules import detect_artifacts, clean_text_by_rules
+        from app.humanizer.editorial_rules import apply_all_editorial_rules
+        flags = detect_artifacts(text).artifact_flags
+        cleaned = clean_text_by_rules(text, flags)
+        return apply_all_editorial_rules(cleaned)

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, List
-from analysis.artifact_detector import detect_artifacts
+from app.detector.rules import detect_artifacts as detect_rule_artifacts
+from app.detector.scorer import compute_ai_likeness
 
 router = APIRouter(prefix="/api/ppt", tags=["ppt_analysis"])
 
@@ -27,11 +28,9 @@ class DetectArtifactsRequest(BaseModel):
 def detect_ppt_artifacts(req: DetectArtifactsRequest):
     """
     Takes the structured PPT data and applies rule-based detection for
-    citations, markdown residue, delimiters, and bare URLs.
-    Populates the 'flags' array for each segment without modifying the text.
+    mechanical artifacts and qualitative AI-likeness bands.
     """
     for slide in req.slides:
-        # Reconstruct paragraph text for better context scanning (e.g. for bare URLs)
         paragraph_texts = {}
         for seg in slide.segments:
             para_idx = seg.paragraph_index
@@ -40,13 +39,41 @@ def detect_ppt_artifacts(req: DetectArtifactsRequest):
             paragraph_texts[para_idx] += seg.original_text + " "
 
         for seg in slide.segments:
-            if not seg.normalized_text.strip():
+            norm = seg.normalized_text.strip()
+            if not norm:
                 continue
             
-            context_text = paragraph_texts.get(seg.paragraph_index, seg.normalized_text)
-            new_flags = detect_artifacts(seg.normalized_text, paragraph_context=context_text)
+            context_text = paragraph_texts.get(seg.paragraph_index, seg.original_text)
             
-            if new_flags:
-                seg.flags.extend(new_flags)
+            # Rule-based artifacts
+            art_res = detect_rule_artifacts(norm, paragraph_context=context_text)
+            
+            # AI likeness
+            ai_res = compute_ai_likeness(norm)
+            
+            seg_flags = []
+            
+            # Add mechanical flags
+            for flag in art_res.artifact_flags:
+                seg_flags.append({
+                    "type": flag.type,
+                    "severity": flag.severity,
+                    "span": flag.span,
+                    "explanation": f"Mechanical artifact detected: '{flag.span}'",
+                    "recommendation": f"Strip this {flag.type} before publishing."
+                })
+                
+            # Add AI likeness flag
+            if ai_res.band in ("moderate", "high"):
+                seg_flags.append({
+                    "type": "ai_likeness_risk",
+                    "severity": "medium" if ai_res.band == "moderate" else "high",
+                    "span": norm,
+                    "explanation": f"AI-likeness band is {ai_res.band} (score: {ai_res.score}). Reasons: {', '.join(ai_res.reasons)}",
+                    "recommendation": "Rewrite to sound more natural and conversational."
+                })
+            
+            if seg_flags:
+                seg.flags.extend(seg_flags)
 
     return req

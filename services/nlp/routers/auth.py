@@ -10,6 +10,7 @@ from typing import Optional
 from database import get_db
 from models import User, UserSettings, UserSession
 from auth_utils import hash_password, verify_password
+from runtime.crypto import hash_email, get_public_key_pem
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -36,7 +37,6 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user: UserResponse
 
-
 def _user_to_response(user: "User") -> UserResponse:
     """Coerce an ORM User into a UserResponse, tolerating NULL columns from legacy rows."""
     return UserResponse(
@@ -50,13 +50,11 @@ def _utcnow() -> datetime:
     """Return current UTC time as a timezone-aware datetime."""
     return datetime.now(timezone.utc)
 
-
 def _ensure_aware(dt: datetime) -> datetime:
     """Treat naive datetimes as UTC to compare safely with aware values."""
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
-
 
 def clean_expired_tokens(db: DBSession):
     """Periodic cleanup of expired tokens."""
@@ -86,7 +84,8 @@ def get_current_user(
     if not token:
         # Dev-only fallback: only when ENV is explicitly development/local_dev. Never in production.
         if env in ("local_dev", "development"):
-            local_user = db.query(User).filter(User.email == "local_user@example.com").first()
+            local_user_hash = hash_email("local_user@example.com")
+            local_user = db.query(User).filter(User.email_hash == local_user_hash).first()
             if local_user:
                 return local_user
         raise HTTPException(
@@ -129,6 +128,11 @@ def get_current_user(
         user.full_name = (user.email.split("@")[0] if user.email else "User")
     return user
 
+@router.get("/public-key")
+def get_public_key():
+    """Exposes the server's public RSA key for transit API key encryption."""
+    return {"public_key": get_public_key_pem()}
+
 @router.post("/signup", response_model=TokenResponse)
 def signup(req: SignupRequest, db: DBSession = Depends(get_db)):
     # 1. Enforce password policy
@@ -136,13 +140,15 @@ def signup(req: SignupRequest, db: DBSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters long.")
 
     # 2. Check if user already exists
-    existing_user = db.query(User).filter(User.email == req.email).first()
+    email_h = hash_email(req.email)
+    existing_user = db.query(User).filter(User.email_hash == email_h).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
 
     # 3. Create user
     new_user = User(
         email=req.email,
+        email_hash=email_h,
         full_name=req.full_name,
         hashed_password=hash_password(req.password),
         role="user"
@@ -177,7 +183,8 @@ def login(req: LoginRequest, db: DBSession = Depends(get_db)):
     clean_expired_tokens(db)
     
     # 1. Fetch user
-    user = db.query(User).filter(User.email == req.email).first()
+    email_h = hash_email(req.email)
+    user = db.query(User).filter(User.email_hash == email_h).first()
     if not user or not user.hashed_password:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 

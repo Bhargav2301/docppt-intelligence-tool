@@ -86,8 +86,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "PLACEHOLDER",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'PLACEHOLDER'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -98,8 +98,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[N]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[N]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -110,15 +110,15 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Y]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Y]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -129,8 +129,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "PLACEHOLDER",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'PLACEHOLDER'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -141,8 +141,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "PLACEHOLDER",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'PLACEHOLDER'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -153,8 +153,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -165,8 +165,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "PLACEHOLDER",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'PLACEHOLDER'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -177,8 +177,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "PLACEHOLDER",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'PLACEHOLDER'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -189,22 +189,22 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[N]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[N]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[N]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[N]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[N]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[N]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -215,8 +215,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "PLACEHOLDER",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'PLACEHOLDER'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -316,8 +316,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "Replace these",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'Replace these'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -334,8 +334,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "placeholder",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'placeholder'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -445,8 +445,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[CITY]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[CITY]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -457,8 +457,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X days]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X days]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -469,15 +469,15 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Y]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Y]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -488,15 +488,15 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[CITY]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[CITY]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -507,8 +507,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -519,8 +519,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Y]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Y]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -531,8 +531,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[CITY]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[CITY]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -543,8 +543,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[NUMBER]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[NUMBER]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -555,8 +555,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -567,8 +567,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[CITY]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[CITY]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -579,15 +579,15 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Y]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Y]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -598,29 +598,29 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[CITY]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[CITY]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Y]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Y]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[NUMBER]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[NUMBER]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -652,8 +652,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "placeholder",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'placeholder'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -753,8 +753,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[City]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[City]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -765,8 +765,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[City / Region]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[City / Region]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -777,15 +777,15 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X%]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X%]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Y%]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Y%]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -1081,8 +1081,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "Replace with",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'Replace with'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -1501,36 +1501,36 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Y]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Y]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[A]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[A]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[B]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[B]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[N]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[N]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -1541,8 +1541,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Proof pending \u2014 to be updated before prospect delivery]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Proof pending \u2014 to be updated before prospect delivery]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -1553,29 +1553,29 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Y]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Y]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Z]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Z]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[N]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[N]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -1586,8 +1586,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Proof pending \u2014 to be updated before prospect delivery]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Proof pending \u2014 to be updated before prospect delivery]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -1598,36 +1598,36 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Y]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Y]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[A]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[A]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[B]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[B]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[N]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[N]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -1638,8 +1638,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Proof pending \u2014 to be updated before prospect delivery]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Proof pending \u2014 to be updated before prospect delivery]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -1650,15 +1650,15 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               },
               {
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[N]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[N]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -1669,8 +1669,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Proof pending \u2014 to be updated before prospect delivery]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Proof pending \u2014 to be updated before prospect delivery]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -1692,8 +1692,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[X]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[X]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           },
@@ -1704,8 +1704,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Pricing to be confirmed before prospect delivery]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Pricing to be confirmed before prospect delivery]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -1800,8 +1800,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "Replace these",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'Replace these'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -1994,8 +1994,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "[Open Row]",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: '[Open Row]'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -2105,8 +2105,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "Replace these",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'Replace these'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -2319,8 +2319,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "Replace these",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'Replace these'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }
@@ -2611,8 +2611,8 @@
                 "type": "placeholder_text",
                 "severity": "high",
                 "matched_text": "replace with",
-                "explanation": "Placeholder or instruction text detected.",
-                "recommendation": "Replace this placeholder with real content before presenting."
+                "explanation": "Mechanical artifact detected: 'replace with'",
+                "recommendation": "Remove the leftover placeholder_text pattern."
               }
             ]
           }

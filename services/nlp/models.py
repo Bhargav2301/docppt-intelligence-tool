@@ -1,14 +1,38 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, BigInteger, Numeric, ForeignKey, text, Uuid, JSON
+from sqlalchemy import Column, String, Boolean, DateTime, Integer, BigInteger, Numeric, ForeignKey, text, Uuid, JSON, TypeDecorator
 from sqlalchemy.orm import relationship
 from database import Base
+from runtime.crypto import encrypt_data, decrypt_data
+
+class EncryptedString(TypeDecorator):
+    """
+    SQLAlchemy TypeDecorator that encrypts a string value before persisting
+    to the database, and decrypts it when retrieving.
+    """
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return encrypt_data(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        try:
+            return decrypt_data(value)
+        except Exception:
+            # Fallback for unencrypted legacy rows
+            return value
 
 class User(Base):
     __tablename__ = "users"
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    email = Column(String, unique=True)
-    full_name = Column(String)
+    email = Column(EncryptedString)
+    email_hash = Column(String, unique=True, index=True, nullable=True)
+    full_name = Column(EncryptedString)
     avatar_url = Column(String)
     auth_provider = Column(String, default="email")
     google_linked = Column(Boolean, default=False)

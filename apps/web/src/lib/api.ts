@@ -1,5 +1,70 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://docppt-backend.onrender.com";
 
+let cachedPublicKey: string | null = null;
+
+async function encryptRSA(text: string, pemKey: string): Promise<string> {
+  const pemHeader = "-----BEGIN PUBLIC KEY-----";
+  const pemFooter = "-----END PUBLIC KEY-----";
+  const pemContents = pemKey
+    .replace(pemHeader, "")
+    .replace(pemFooter, "")
+    .replace(/\s+/g, "");
+  
+  const binaryDerString = window.atob(pemContents);
+  const binaryDer = new Uint8Array(binaryDerString.length);
+  for (let i = 0; i < binaryDerString.length; i++) {
+    binaryDer[i] = binaryDerString.charCodeAt(i);
+  }
+
+  const publicKey = await window.crypto.subtle.importKey(
+    "spki",
+    binaryDer.buffer,
+    {
+      name: "RSA-OAEP",
+      hash: "SHA-256",
+    },
+    true,
+    ["encrypt"]
+  );
+
+  const enc = new TextEncoder();
+  const encryptedBuffer = await window.crypto.subtle.encrypt(
+    {
+      name: "RSA-OAEP",
+    },
+    publicKey,
+    enc.encode(text)
+  );
+
+  const bytes = new Uint8Array(encryptedBuffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
+
+async function getEncryptedGeminiKey(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const rawKey = sessionStorage.getItem("gemini_api_key");
+  if (!rawKey) return null;
+
+  try {
+    if (!cachedPublicKey) {
+      const res = await fetch(`${API_BASE_URL}/api/auth/public-key`);
+      if (!res.ok) throw new Error("Failed to fetch public key");
+      const data = await res.json();
+      cachedPublicKey = data.public_key;
+    }
+    
+    if (!cachedPublicKey) return null;
+    return await encryptRSA(rawKey, cachedPublicKey);
+  } catch (err) {
+    console.error("Error encrypting Gemini API Key:", err);
+    return null;
+  }
+}
+
 /**
  * Custom error class for API failures
  */
@@ -33,6 +98,14 @@ export async function apiFetch<T>(
     const token = localStorage.getItem("docppt_token");
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
+    }
+    
+    // Inject encrypted Gemini API key if present in sessionStorage
+    if (!endpoint.includes("/api/auth/public-key")) {
+      const encKey = await getEncryptedGeminiKey();
+      if (encKey) {
+        headers.set("X-Gemini-API-Key", encKey);
+      }
     }
   }
   

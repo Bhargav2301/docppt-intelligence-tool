@@ -34,3 +34,7 @@ docppt.db
 
 # Uploads
 services/nlp/uploads/
+
+# Keys and Certificates
+*.pem
+*.key

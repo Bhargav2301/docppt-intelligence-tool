@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, Save, Shield, Cpu, Zap, Palette, Loader2, CheckCircle, HelpCircle } from "lucide-react";
+import { Settings, Save, Shield, Cpu, Zap, Palette, Loader2, CheckCircle, Key } from "lucide-react";
 import { SettingsAPI } from "@/lib/api";
 
 export default function SettingsPage() {
@@ -9,15 +9,21 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
+  // Gemini API Key state (kept strictly local / in-session)
+  const [geminiApiKey, setGeminiApiKey] = useState("");
+  
   // Privacy & Telemetry states
   const [telemetryConsent, setTelemetryConsent] = useState<string>("denied");
 
   useEffect(() => {
     fetchSettings();
-    // Load local telemetry consent state
+    // Load local states from browser storage
     if (typeof window !== "undefined") {
       const consent = localStorage.getItem("docppt_crash_consent");
       setTelemetryConsent(consent || "denied");
+      
+      const storedKey = sessionStorage.getItem("gemini_api_key");
+      setGeminiApiKey(storedKey || "");
     }
   }, []);
 
@@ -41,6 +47,16 @@ export default function SettingsPage() {
         advanced_instruction_model: settings.advanced_instruction_model || "llama3",
         advanced_model_endpoint: settings.advanced_model_endpoint || "http://localhost:11434/v1",
       });
+      
+      // Save Gemini key to sessionStorage strictly
+      if (typeof window !== "undefined") {
+        if (geminiApiKey.strip ? geminiApiKey.strip() : geminiApiKey.trim()) {
+          sessionStorage.setItem("gemini_api_key", geminiApiKey.trim());
+        } else {
+          sessionStorage.removeItem("gemini_api_key");
+        }
+      }
+      
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e) {
@@ -66,6 +82,13 @@ export default function SettingsPage() {
   }
 
   const modelModes = [
+    {
+      id: "gemini_byok",
+      name: "Gemini BYOK (Bring Your Own Key)",
+      desc: "Uses Google's Gemini LLM. The API key is stored only in your browser's session storage and sent encrypted in transit. Privacy-first, high quality rewrites.",
+      local: false,
+      custom: false,
+    },
     {
       id: "local_cpu",
       name: "Local CPU",
@@ -126,12 +149,6 @@ export default function SettingsPage() {
           <button className="w-full text-left px-4 py-2.5 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] font-medium text-sm">
             General Options
           </button>
-          <button className="w-full text-left px-4 py-2.5 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors text-sm">
-            Integrations
-          </button>
-          <button className="w-full text-left px-4 py-2.5 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors text-sm">
-            Advanced Dev Tools
-          </button>
         </div>
 
         {/* Content */}
@@ -171,6 +188,27 @@ export default function SettingsPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Dynamic input showing ONLY for gemini_byok */}
+              {settings.model_mode === "gemini_byok" && (
+                <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-500/5 space-y-4 animate-fade-in">
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-semibold mb-1 text-purple-400">
+                      <Key className="w-3.5 h-3.5" /> Gemini API Key
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="AIzaSy..."
+                      value={geminiApiKey}
+                      onChange={(e) => setGeminiApiKey(e.target.value)}
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
+                    />
+                    <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+                      Your API key is saved strictly in your local browser session storage. It is never stored on the server database, and it is transmitted encrypted with the server's public RSA key.
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Dynamic input showing ONLY for user_hosted_endpoint */}
               {settings.model_mode === "user_hosted_endpoint" && (
@@ -273,7 +311,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--bg-elevated)]/50 border border-[var(--border-subtle)]">
               <div>
                 <div className="font-semibold text-sm text-[var(--text-primary)]">Retain Source Decks & Documents</div>
-                <div className="text-xs text-[var(--text-muted)] leading-relaxed mt-0.5">Keep original .docx and .pptx files inside cache store directories after summaries build.</div>
+                <div className="text-xs text-[var(--text-muted)] leading-relaxed mt-0.5">Keep original .pptx files inside cache store directories after summaries build.</div>
               </div>
               <button
                 type="button"

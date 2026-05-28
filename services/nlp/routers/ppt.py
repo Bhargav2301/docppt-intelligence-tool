@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends
+from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends, Header
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session as DBSession
 from typing import Dict, Any, List
@@ -13,15 +13,19 @@ from datetime import datetime
 
 from extraction.ppt_parser import extract_ppt_text
 from extraction.ppt_compiler import compile_ppt
-from analysis.artifact_detector import detect_artifacts
 from analysis.template_similarity import check_template_similarity
 from analysis.rewriter import generate_rewrite
-from analysis.evaluator import calculate_similarity, calculate_perplexity
+from analysis.evaluator import calculate_similarity
 from runtime.config import REWRITE_MAX_EXPANSION, HALLUCINATION_SIMILARITY_THRESHOLD
 from runtime.upload_guard import validate_upload
 from database import get_db
 from models import Session, User, PptOutput, PptSegment, File as DbFile
 from routers.auth import get_current_user
+from runtime.crypto import decrypt_api_key
+from app.detector.rules import detect_artifacts as detect_rule_artifacts, clean_text_by_rules
+from app.detector.scorer import compute_ai_likeness
+from app.humanizer.editorial_rules import apply_all_editorial_rules
+from app.humanizer.constraints import check_export_safety
 
 router = APIRouter(prefix="/api/ppt", tags=["ppt"])
 
@@ -60,6 +64,11 @@ async def compile_presentation(
         if not isinstance(mods_list, list):
             raise ValueError("Modifications must be a JSON array.")
 
+        # Apply editorial rules to every modification final text to ensure cleanliness
+        for mod in mods_list:
+            if "new_text" in mod:
+                mod["new_text"] = apply_all_editorial_rules(mod["new_text"])
+
         file_bytes = await file.read()
         validate_upload(file, file_bytes, "pptx")
         compiled_bytes = compile_ppt(file_bytes, mods_list)
@@ -85,8 +94,6 @@ async def compile_session(
 ):
     """
     Compile using the stored .pptx file for a given session.
-    The frontend sends the accepted modifications JSON, and this endpoint
-    reads the saved .pptx from disk, applies changes, and streams the result.
     """
     import uuid
     try:
@@ -106,6 +113,11 @@ async def compile_session(
         mods_list = json.loads(modifications)
         if not isinstance(mods_list, list):
             raise ValueError("Modifications must be a JSON array.")
+        
+        # Apply editorial rules to every modification text before compiling
+        for mod in mods_list:
+            if "new_text" in mod:
+                mod["new_text"] = apply_all_editorial_rules(mod["new_text"])
         
         with open(pptx_path, "rb") as f:
             file_bytes = f.read()
@@ -138,7 +150,8 @@ async def process_single_ppt_internal(
     filename: str,
     sensitivity: str,
     db: DBSession,
-    current_user: User
+    current_user: User,
+    gemini_api_key: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Internal helper that executes the E2E presentation humanization pipeline.
@@ -167,7 +180,7 @@ async def process_single_ppt_internal(
         
         extracted_data = extract_ppt_text(pptx_path)
         
-        # 3. Detect artifacts
+        # 3. Detect artifacts & AI Likeness
         db_session.status = "analyzing"
         db.commit()
         
@@ -188,10 +201,38 @@ async def process_single_ppt_internal(
                     continue
                 
                 context = paragraph_texts.get(seg.get("paragraph_index", 0), norm)
-                new_flags = detect_artifacts(norm, paragraph_context=context)
-                if new_flags:
-                    seg.setdefault("flags", []).extend(new_flags)
-                    total_flags += len(new_flags)
+                
+                # Rule-based artifacts
+                art_res = detect_rule_artifacts(norm, paragraph_context=context)
+                
+                # AI Likeness
+                ai_res = compute_ai_likeness(norm)
+                
+                seg_flags = []
+                
+                # Add mechanical flags
+                for flag in art_res.artifact_flags:
+                    seg_flags.append({
+                        "type": flag.type,
+                        "severity": flag.severity,
+                        "span": flag.span,
+                        "explanation": f"Mechanical artifact detected: '{flag.span}'",
+                        "recommendation": f"Strip this {flag.type} before publishing."
+                    })
+                    
+                # Add AI likeness warning flag
+                if ai_res.band in ("moderate", "high"):
+                    seg_flags.append({
+                        "type": "ai_likeness_risk",
+                        "severity": "medium" if ai_res.band == "moderate" else "high",
+                        "span": norm,
+                        "explanation": f"AI-likeness band is {ai_res.band} (score: {ai_res.score}). Reasons: {', '.join(ai_res.reasons)}",
+                        "recommendation": "Rewrite to sound more natural and conversational."
+                    })
+                
+                if seg_flags:
+                    seg.setdefault("flags", []).extend(seg_flags)
+                    total_flags += len(seg_flags)
 
         # Cross-session template/slide similarity checks
         try:
@@ -206,7 +247,6 @@ async def process_single_ppt_internal(
                 slide_idx = slide.get("slide_index", 0)
                 if slide_idx in similarity_matches:
                     match = similarity_matches[slide_idx]
-                    # Append similarity warning flag to the first segment that contains text on this slide
                     for seg in slide.get("segments", []):
                         if seg.get("original_text", "").strip():
                             sim_flag = {
@@ -214,11 +254,11 @@ async def process_single_ppt_internal(
                                 "severity": "medium",
                                 "matched_text": seg.get("original_text", ""),
                                 "explanation": f"This slide matches a template previously used in '{match['matched_filename']}' (Slide {match['matched_slide_idx'] + 1}).",
-                                "recommendation": "Customize this slide's content specifically for this client to avoid generic template fatigue."
+                                "recommendation": "Customize this slide's content specifically to avoid generic template fatigue."
                             }
                             seg.setdefault("flags", []).append(sim_flag)
                             total_flags += 1
-                            break # Only flag the first non-empty segment of the slide
+                            break
         except Exception as sim_err:
             logger.error(f"Error executing template similarity check: {str(sim_err)}")
         
@@ -232,36 +272,48 @@ async def process_single_ppt_internal(
                 original = seg.get("original_text", "")
                 
                 if not flags or not original.strip():
-                    seg["final_text"] = original
+                    seg["final_text"] = apply_all_editorial_rules(original)
                     seg["decision"] = "no_change"
                     continue
                 
-                # Conservative: only strip artifacts, no generative rewrite
+                # Conservative: only strip artifacts & enforce editorial rules
                 if sensitivity == "conservative":
-                    from analysis.artifact_detector import clean_text_by_rules
-                    seg["final_text"] = clean_text_by_rules(original, flags)
+                    art_flags = detect_rule_artifacts(original).artifact_flags
+                    cleaned = clean_text_by_rules(original, art_flags)
+                    seg["final_text"] = apply_all_editorial_rules(cleaned)
                     seg["decision"] = "pending"
                     continue
                 
                 # Balanced / Aggressive: attempt generative rewrite
                 try:
-                    rewritten = generate_rewrite(original, tone="professional", db=db, session_id=db_session.id)
+                    rewritten = generate_rewrite(
+                        original,
+                        tone="professional",
+                        db=db,
+                        session_id=db_session.id,
+                        gemini_api_key=gemini_api_key
+                    )
+                    
                     if not rewritten:
-                        seg["final_text"] = original
+                        seg["final_text"] = apply_all_editorial_rules(original)
                         seg["decision"] = "pending"
                         continue
                     
-                    # Length constraint
-                    if len(original) > 0 and len(rewritten) > (REWRITE_MAX_EXPANSION * len(original)):
-                        seg["final_text"] = original
+                    role = seg.get("role", "body")
+                    safety_res = check_export_safety(original, rewritten, role)
+                    safety = safety_res.get("safety", "safe_replace")
+                    
+                    if safety == "needs_shorter_option":
+                        seg["final_text"] = apply_all_editorial_rules(original)
                         seg.setdefault("flags", []).append({
                             "type": "length_overflow",
                             "severity": "low",
-                            "explanation": "Rewrite exceeded length limit and was discarded."
+                            "explanation": f"Proposed rewrite was too long for slide {role} layout and was discarded.",
+                            "safety": "needs_shorter_option"
                         })
                         seg["decision"] = "pending"
                         continue
-                    
+                        
                     # Semantic evaluation
                     similarity = calculate_similarity(original, rewritten)
                     if similarity > 0.0 and similarity < HALLUCINATION_SIMILARITY_THRESHOLD:
@@ -270,20 +322,28 @@ async def process_single_ppt_internal(
                             "severity": "high",
                             "explanation": f"Similarity {similarity:.2f} is below threshold."
                         })
+                        
+                    if safety == "manual_review":
+                        seg.setdefault("flags", []).append({
+                            "type": "layout_overflow_risk",
+                            "severity": "medium",
+                            "explanation": "Rewrite introduces potential line break or layout overflow risk."
+                        })
                     
-                    seg["final_text"] = rewritten
-                    seg["eval_scores"] = {"similarity": similarity}
+                    seg["final_text"] = apply_all_editorial_rules(rewritten)
+                    seg["eval_scores"] = {"similarity": similarity, "safety": safety}
                     seg["decision"] = "pending"
                     
-                except Exception:
-                    seg["final_text"] = original
+                except Exception as rew_err:
+                    logger.error(f"Error during segment rewrite: {rew_err}")
+                    seg["final_text"] = apply_all_editorial_rules(original)
                     seg["decision"] = "pending"
         
         # 5. Persist
         db_session.status = "completed"
         db_session.completed_at = datetime.utcnow()
         
-        # Post-process: if final_text is identical to original_text, keep flags and set to pending if flags exist.
+        # Post-process segment decisions
         cleaned_total_flags = 0
         for slide in extracted_data.get("slides", []):
             for seg in slide.get("segments", []):
@@ -293,7 +353,7 @@ async def process_single_ppt_internal(
                 if final == original and not flags:
                     seg["flags"] = []
                     seg["decision"] = "no_change"
-                    seg["final_text"] = original
+                    seg["final_text"] = apply_all_editorial_rules(original)
                 else:
                     if flags:
                         seg["decision"] = "pending"
@@ -429,11 +489,19 @@ async def process_presentation(
     file: UploadFile = File(...),
     sensitivity: str = Form("conservative"),
     db: DBSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_gemini_api_key: Optional[str] = Header(None)
 ):
     """
     Pipeline for a single presentation.
     """
+    gemini_api_key = None
+    if x_gemini_api_key:
+        try:
+            gemini_api_key = decrypt_api_key(x_gemini_api_key)
+        except Exception as e:
+            logger.error(f"Failed to decrypt X-Gemini-API-Key: {e}")
+
     tmp_path = await save_upload_file_tmp(file)
     try:
         return await process_single_ppt_internal(
@@ -441,7 +509,8 @@ async def process_presentation(
             filename=file.filename,
             sensitivity=sensitivity,
             db=db,
-            current_user=current_user
+            current_user=current_user,
+            gemini_api_key=gemini_api_key
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -457,12 +526,19 @@ async def batch_process_presentation(
     files: List[UploadFile] = File(...),
     sensitivity: str = Form("conservative"),
     db: DBSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_gemini_api_key: Optional[str] = Header(None)
 ):
     """
     Pipeline for processing multiple presentations in a batch.
-    Gracefully handles partial failures.
     """
+    gemini_api_key = None
+    if x_gemini_api_key:
+        try:
+            gemini_api_key = decrypt_api_key(x_gemini_api_key)
+        except Exception as e:
+            logger.error(f"Failed to decrypt X-Gemini-API-Key: {e}")
+
     results = []
     
     for file in files:
@@ -484,7 +560,8 @@ async def batch_process_presentation(
                 filename=file.filename,
                 sensitivity=sensitivity,
                 db=db,
-                current_user=current_user
+                current_user=current_user,
+                gemini_api_key=gemini_api_key
             )
             session_id = res["session"]["id"]
             results.append(BatchPptItemResponse(
@@ -515,5 +592,3 @@ async def batch_process_presentation(
                     pass
             
     return results
-
-

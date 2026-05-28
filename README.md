@@ -16,7 +16,33 @@ The **DocPPT Intelligence Tool** is a web-based PPTX intelligence platform that 
 
 The tool accepts a `.pptx` upload, runs an explainable AI-likeness analysis on every text element across all slides, and rewrites flagged text into natural, concise, audience-ready language — while preserving the deck's structure, layout, non-text assets, and formatting with 100% fidelity.
 
-All analysis and rewriting operates through **free, local, and small-model NLP pipelines** using deterministic feature engineering and optional local language model scoring rather than relying on paid external LLM APIs.
+All analysis and rewriting operates through **free, local, and small-model NLP pipelines** using deterministic feature engineering and optional local language model scoring rather than relying on paid external LLM APIs. A Gemini BYOK (Bring Your Own Key) option is also supported for higher-quality rewrites.
+
+---
+
+## 🌐 Live Deployment
+
+| Service | URL |
+|---|---|
+| Frontend | [https://docppt-frontend.onrender.com/process/ppt](https://docppt-frontend.onrender.com/process/ppt) |
+| Backend API Docs | [https://docppt-backend.onrender.com/docs](https://docppt-backend.onrender.com/docs) |
+
+---
+
+## ✅ v2 Implementation Status
+
+The following backend pipeline components are fully implemented and all 22 automated tests pass:
+
+| Component | File | Status |
+|---|---|---|
+| Unified rewrite pipeline | `humanizer/rewriter.py` | ✅ Complete |
+| Rewrite planner (selective trigger) | `humanizer/planner.py` | ✅ Complete |
+| Strict judge validation | `humanizer/judge.py` | ✅ Complete |
+| Export safety checks | `humanizer/constraints.py` | ✅ Complete |
+| Slide role metadata extraction | `extraction/ppt_parser.py` | ✅ Complete |
+| Editorial rules (spelling, emoji, punctuation) | `app/editorial_rules.py` | ✅ Complete |
+
+The UI layer (Next.js frontend) is the active development surface. See the Getting Started and Key Features sections for what each screen should expose.
 
 ---
 
@@ -52,7 +78,7 @@ Computes an explainable AI-likeness score for each text element using measurable
 | Readability | Flesch-Kincaid grade, Gunning fog, discourse transition frequency |
 | Optional model signals | Local language model perplexity, embedding anomaly distance |
 
-Scores map to three bands: **low**, **moderate**, and **high** AI-likeness. Each result includes specific, human-readable reasons rather than a single opaque number.
+Scores map to three bands: **low**, **moderate**, and **high** AI-likeness. Each result includes specific, human-readable reasons rather than a single opaque number. Short text elements (under 20 words) receive score dampening.
 
 The tool never claims authorship certainty. It identifies **AI-like phrasing patterns** only.
 
@@ -60,13 +86,11 @@ The tool never claims authorship certainty. It identifies **AI-like phrasing pat
 
 A multi-stage controlled rewrite pipeline that diagnoses each text element's specific weaknesses and applies targeted corrections:
 
-- **Cleanup transforms:** remove artifacts, normalize punctuation, strip generation framing.
-- **Compression transforms:** delete redundant modifiers, remove restatements, convert abstract noun phrases to direct operational verbs.
-- **Specificity transforms:** replace generic business nouns with concrete domain language already implied by context.
-- **Rhythm transforms:** vary sentence openings across adjacent bullets, mix clause lengths, avoid uniform grammatical form.
-- **Tone transforms:** match one of five user-selectable tone presets — `presentation_concise`, `executive_polished`, `founder_clear`, `product_manager_direct`, `consulting_professional`.
-
-Multiple rewrite candidates are generated and ranked by a Judge agent that prioritizes meaning preservation and slide fit over detector score reduction.
+- **Planner:** only triggers generative rewriting for `moderate` or `high` AI-likeness segments. `low` segments are passed through with deterministic cleanup only — no LLM calls.
+- **Rewriter:** generates multiple candidates from Gemini BYOK, managed endpoints, or local CPU/GPU models. Falls back to deterministic rule-based candidates if all model calls fail.
+- **Judge:** rejects candidates that modify numbers or digits, introduce new named entities, contain emojis, use British English spellings, or exceed character constraints. Only meaning-preserving, layout-safe candidates pass.
+- **Tone presets:** `presentation_concise`, `executive_polished`, `founder_clear`, `product_manager_direct`, `consulting_professional`.
+- **Intensity levels:** Minimal (artifact cleanup only), Balanced (rhythm + phrasing), Strong (full compression + specificity transformation).
 
 ### 5. Layout-Safe PPTX Export
 
@@ -77,11 +101,15 @@ Multiple rewrite candidates are generated and ranked by a Judge agent that prior
 
 ### 6. Human-in-the-Loop Review UI
 
-- Per-slide AI-likeness badges with expandable "Why this was flagged" panels.
+- Per-slide AI-likeness badges with band label (LOW / MOD / HIGH) and percentage score.
+- Per-segment AI-likeness score line with top reason and expandable **"Why flagged"** disclosure panel showing `flag.explanation`, `flag.matched_text`, and `flag.recommendation` for each flag.
+- Safety label badges surface layout overflow risks (`⚠ Shorter needed`, `🔴 Manual review`) directly on each segment card. Manual-review segments block the Accept button until the user edits or rejects.
 - Side-by-side before/after diff view with inline change highlighting.
-- Rewrite intensity selector: `Minimal`, `Balanced`, or `Strong`.
-- One-click revert to original text per slide.
-- Safety labels surface `manual_review` items before export.
+- **"Run Rewrite" panel** on the review screen with tone preset and intensity selectors — fires the full rewrite pipeline on all flagged segments and refreshes results in place.
+- Per-segment **"Re-run"** button for targeted individual retries without reprocessing the full deck.
+- Progress bar across all slides showing accepted / pending / rejected counts.
+- **Pre-export safety modal** alerts when `manual_review`-labeled segments are still accepted, showing a count before allowing export.
+- One-click revert to original text per segment.
 - Tone preset and local model settings persist via `/settings`.
 
 ---
@@ -92,6 +120,16 @@ Multiple rewrite candidates are generated and ranked by a Judge agent that prior
 docppt-intelligence-tool/
 ├── apps/
 │   └── web/                   # Next.js frontend (React 19, TypeScript, Tailwind CSS v4)
+│       └── src/
+│           ├── app/
+│           │   ├── process/ppt/   # Upload page (file, tone, intensity)
+│           │   ├── review/ppt/[id]/ # Review + rewrite + export
+│           │   ├── settings/      # Tone, intensity, BYOK key, local model
+│           │   ├── dashboard/     # Session history
+│           │   └── auth/          # Login / signup
+│           ├── components/        # AiLikenessBadge, SafetyLabelBadge, etc.
+│           └── lib/
+│               └── api.ts         # PptAPI, RewriteAPI, EvalAPI, SettingsAPI, AuthAPI
 ├── services/
 │   └── nlp/                   # FastAPI backend service (Python)
 │       └── app/
@@ -154,6 +192,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+> **Gemini BYOK (Bring Your Own Key):** To use Gemini for rewriting, enter your Gemini API key in Settings → Rewrite Preferences. The key is stored in `sessionStorage` only (cleared on tab close) and is RSA-encrypted before transit. If no key is provided, the tool uses the configured local model or falls back to deterministic rewrite rules.
+
 ---
 
 ## 🔌 API Reference
@@ -166,13 +206,16 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `/ppt` | POST | Upload and parse `.pptx` files |
 | `/ppt_analysis` | POST | Detect artifacts and AI-likeness per slide element |
 | `/rewrite` | POST | Generate humanized rewrites for flagged text |
+| `/rewrite/segment/{session_id}/{segment_id}` | POST | Re-run rewrite for a single segment |
 | `/eval` | POST | Score rewrite quality against source text |
 | `/settings` | GET / POST | Tone presets, local model endpoints, user preferences |
+| `/settings/test-gemini` | GET | Test Gemini API key connectivity |
+| `/settings/test-local-model` | GET | Test local model endpoint connectivity |
 | `/export` | POST | Download the rewritten PPTX (layout-safe) |
 | `/telemetry` | POST | Pipeline performance and quality logs |
 | `/health` | GET | API heartbeat |
 
-> **Removed routes:** `/doc` (document parsing) and `/analysis` (spec generation) are no longer available. Requests to these routes will return a `410 Gone` response with a deprecation message.
+> **Removed routes:** `/doc` (document parsing) and `/analysis` (spec generation) are no longer available. Requests to these routes return a `410 Gone` response with a deprecation message.
 
 ---
 
@@ -199,16 +242,22 @@ cd services/nlp
 pytest tests/ -v
 ```
 
+**Current status: 22 passed, 5 warnings** (15.86s)
+
 Key test modules:
 
 | Test file | Coverage |
 |---|---|
+| `test_editorial_rules.py` | Spelling conversions, emoji removal, punctuation formatting |
+| `test_judge.py` | Strict validation — rejection of emojis, British spelling, number edits, new entities |
+| `test_constraints.py` | Layout safety estimation, overflow and line-break risk categorization |
+| `test_integration.py` | JWT signup/login, API transit key decryption, health endpoints |
+| `test_scorer.py` | Short-text dampening rules, score band boundary conditions |
+| `test_crypto.py` | RSA public key fetch, encryption round-trip |
 | `test_features.py` | Feature computation functions |
 | `test_rules.py` | Artifact detection rules |
-| `test_scorer.py` | Score band boundary conditions |
 | `test_planner.py` | Rewrite strategy selection |
 | `test_rewriter.py` | Candidate generation per tone preset |
-| `test_judge.py` | Candidate ranking and rejection |
 | `test_layout_checks.py` | Text-box overflow detection |
 
 Integration tests cover the full round-trip: upload → analysis → rewrite → export → PPTX reconstruction verification.
@@ -221,6 +270,7 @@ Integration tests cover the full round-trip: upload → analysis → rewrite →
 - The AI-likeness score is a style-pattern signal, not an authorship claim. Short text elements (under 20 words) receive score dampening.
 - Rewrites that exceed the estimated character limit for a text box are flagged as `needs_shorter_option` and routed back for a tighter candidate. Auto-apply is blocked until a safe rewrite is confirmed.
 - Speaker notes are analyzed and rewritten separately from slide body text and are never inserted into slide shape runs.
+- The Gemini BYOK key is stored in `sessionStorage` only and is not persisted across browser sessions.
 
 ---
 

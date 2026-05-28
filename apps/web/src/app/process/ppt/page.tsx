@@ -152,7 +152,7 @@ export default function PPTHumanizer() {
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-sm shadow-amber-500/5">
-              ⚠️ No Gemini key — using local model
+              ⚠️ No Gemini key — using rule-based fallback
             </span>
           )}
         </div>
@@ -196,7 +196,7 @@ export default function PPTHumanizer() {
                     Click or drag to upload .pptx file(s)
                   </p>
                   <p className="text-[var(--text-muted)] text-sm mt-1">
-                    Max file size: 20MB • Multi-select supported
+                    Max file size: 50MB • Multi-select supported
                   </p>
                 </>
               )}

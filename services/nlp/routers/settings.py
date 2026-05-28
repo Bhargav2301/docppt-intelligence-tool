@@ -28,8 +28,12 @@ def get_settings(db: DBSession = Depends(get_db), current_user: User = Depends(g
     settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.id).first()
     if not settings:
         # Create default settings if not exists
-        settings = UserSettings(user_id=current_user.id)
+        settings = UserSettings(user_id=current_user.id, model_mode="gemini_byok")
         db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    elif settings.model_mode != "gemini_byok":
+        settings.model_mode = "gemini_byok"
         db.commit()
         db.refresh(settings)
     
@@ -39,13 +43,13 @@ def get_settings(db: DBSession = Depends(get_db), current_user: User = Depends(g
 def update_settings(update: SettingsUpdate, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.id).first()
     if not settings:
-        settings = UserSettings(user_id=current_user.id)
+        settings = UserSettings(user_id=current_user.id, model_mode="gemini_byok")
         db.add(settings)
     
     if update.theme is not None:
         settings.theme = update.theme
-    if update.model_mode is not None:
-        settings.model_mode = update.model_mode
+    # Force model_mode to be gemini_byok
+    settings.model_mode = "gemini_byok"
     if update.ppt_sensitivity is not None:
         settings.ppt_sensitivity = update.ppt_sensitivity
     if update.advanced_instruction_model is not None:
@@ -110,66 +114,4 @@ def test_gemini(request: Request):
 
 @router.get("/test-local-model")
 def test_local_model(url: str):
-    if not url:
-        raise HTTPException(status_code=400, detail="Local endpoint URL query parameter is missing.")
-    
-    try:
-        endpoint = url.rstrip("/")
-        test_endpoints = [f"{endpoint}/v1/models", f"{endpoint}/api/tags", endpoint]
-        last_error = None
-        for test_url in test_endpoints:
-            try:
-                req = urllib.request.Request(test_url, method="GET")
-                with urllib.request.urlopen(req, timeout=5) as response:
-                    if response.status in (200, 201, 204, 401):
-                        return {"status": "success", "message": f"Successfully connected to local model server at {test_url}"}
-            except Exception as conn_err:
-                last_error = conn_err
-        
-        # Check if the last error represents a connection refused (Errno 111 / 61)
-        err_str = str(last_error).lower()
-        is_conn_refused = False
-        if isinstance(last_error, ConnectionRefusedError):
-            is_conn_refused = True
-        elif isinstance(last_error, urllib.error.URLError):
-            reason = last_error.reason
-            if isinstance(reason, OSError):
-                if reason.errno in (111, 61) or isinstance(reason, ConnectionRefusedError):
-                    is_conn_refused = True
-        elif isinstance(last_error, OSError) and getattr(last_error, 'errno', None) in (111, 61):
-            is_conn_refused = True
-        
-        if not is_conn_refused and ("errno 111" in err_str or "errno 61" in err_str or "connection refused" in err_str):
-            is_conn_refused = True
-
-        if is_conn_refused:
-            return {
-                "status": "not_running",
-                "message": "No model server found at this address. Start Ollama or LM Studio locally and try again."
-            }
-
-        raise HTTPException(status_code=500, detail=f"Could not connect to model server. Error: {str(last_error)}")
-    except Exception as e:
-        err_str = str(e).lower()
-        is_conn_refused = False
-        if isinstance(e, ConnectionRefusedError):
-            is_conn_refused = True
-        elif isinstance(e, urllib.error.URLError):
-            reason = e.reason
-            if isinstance(reason, OSError):
-                if reason.errno in (111, 61) or isinstance(reason, ConnectionRefusedError):
-                    is_conn_refused = True
-        elif isinstance(e, OSError) and getattr(e, 'errno', None) in (111, 61):
-            is_conn_refused = True
-
-        if not is_conn_refused and ("errno 111" in err_str or "errno 61" in err_str or "connection refused" in err_str):
-            is_conn_refused = True
-
-        if is_conn_refused:
-            return {
-                "status": "not_running",
-                "message": "No model server found at this address. Start Ollama or LM Studio locally and try again."
-            }
-        raise HTTPException(status_code=500, detail=f"Local model connection failed: {str(e)}")
-
-
+    raise HTTPException(status_code=400, detail="Local model mode is disabled. Only Gemini BYOK is supported.")

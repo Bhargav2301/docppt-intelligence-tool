@@ -25,7 +25,7 @@ def generate_rewrite(
     if not text.strip():
         return None
         
-    mode = MODEL_MODE
+    mode = "gemini_byok"
     adv_model = ADVANCED_INSTRUCTION_MODEL
     adv_endpoint = ADVANCED_MODEL_ENDPOINT
     managed_model = MANAGED_LLM_MODEL_NAME
@@ -49,7 +49,8 @@ def generate_rewrite(
             if user:
                 settings = db.query(UserSettings).filter(UserSettings.user_id == user.id).first()
                 if settings:
-                    mode = settings.model_mode or mode
+                    # Enforce gemini_byok
+                    mode = "gemini_byok"
                     adv_model = settings.advanced_instruction_model or adv_model
                     adv_endpoint = settings.advanced_model_endpoint or adv_endpoint
         except Exception as e:

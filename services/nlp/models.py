@@ -49,7 +49,7 @@ class UserSettings(Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), unique=True)
     theme = Column(String, default="dark")
-    model_mode = Column(String, default="local_cpu")
+    model_mode = Column(String, default="gemini_byok")
     summarization_model = Column(String)
     instruction_model = Column(String)
     perplexity_model = Column(String)

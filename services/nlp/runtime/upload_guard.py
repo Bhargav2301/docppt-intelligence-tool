@@ -2,7 +2,7 @@
 import os
 from fastapi import HTTPException, UploadFile
 
-MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))  # 25 MB default
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))  # 50 MB default
 
 # .docx and .pptx are both ZIP-based (OOXML); both start with PK\x03\x04.
 _OOXML_MAGIC = b"PK\x03\x04"

@@ -18,6 +18,12 @@ def run_migrations():
                 conn.execute(text("ALTER TABLE user_settings ADD COLUMN advanced_instruction_model VARCHAR DEFAULT 'llama3'"))
             if "advanced_model_endpoint" not in columns:
                 conn.execute(text("ALTER TABLE user_settings ADD COLUMN advanced_model_endpoint VARCHAR DEFAULT 'http://localhost:11434/v1'"))
+            if "default_tone_preset" not in columns:
+                conn.execute(text("ALTER TABLE user_settings ADD COLUMN default_tone_preset VARCHAR DEFAULT 'presentation_concise'"))
+            if "default_intensity" not in columns:
+                conn.execute(text("ALTER TABLE user_settings ADD COLUMN default_intensity VARCHAR DEFAULT 'balanced'"))
+            if "local_model_endpoint" not in columns:
+                conn.execute(text("ALTER TABLE user_settings ADD COLUMN local_model_endpoint VARCHAR DEFAULT 'http://localhost:11434'"))
 
     if "users" in inspector.get_table_names():
         columns = [col["name"] for col in inspector.get_columns("users")]

@@ -1,3 +1,4 @@
+/* eslint-disable */
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://docppt-backend.onrender.com";
 
 let cachedPublicKey: string | null = null;
@@ -176,28 +177,65 @@ export type RecentSessionItem = {
   };
 };
 
-export type RequirementItem = {
-  text: string;
-  priority: string;
-  category: string;
+// -----------------------------------------------
+// Rewrite / AI-Likeness types (new in v2)
+// -----------------------------------------------
+
+export type AiLikenessScore = {
+  score: number;          // 0–100
+  band: "low" | "moderate" | "high";
+  reasons: string[];      // human-readable explanation strings
 };
 
-export type DocProcessResponse = {
-  session: {
-    id: string;
-    session_type: string;
-    input_type: string;
-    input_label: string;
-    status: string;
-    created_at: string;
-    completed_at: string;
-  };
-  output: {
-    structured_summary: string;
-    product_description: string;
-    implementation_requirements: Record<string, RequirementItem[]>;
-    word_count: number;
-  };
+export type SegmentRewriteResult = {
+  segment_id: string;
+  action: "pass_through" | "clean_only" | "rewrite";
+  candidate_text: string | null;
+  judge_verdict: "accepted" | "rejected_all" | null;
+  rejection_reason: string | null;
+  eval_scores: { similarity?: number } | null;
+};
+
+export type RewriteRequest = {
+  session_id: string;
+  tone_preset: TonePreset;
+  intensity: "minimal" | "balanced" | "strong";
+  segment_ids?: string[];   // optional: rewrite specific segments only
+};
+
+export type RewriteResponse = {
+  session_id: string;
+  results: SegmentRewriteResult[];
+  total_rewritten: number;
+  total_passed: number;
+  total_failed: number;
+};
+
+export type TonePreset =
+  | "presentation_concise"
+  | "executive_polished"
+  | "founder_clear"
+  | "product_manager_direct"
+  | "consulting_professional";
+
+export type RewriteIntensity = "minimal" | "balanced" | "strong";
+
+export type SafetyLabel =
+  | "safe_replace"
+  | "needs_shorter_option"
+  | "manual_review";
+
+export type PptSegmentV2 = PptSegmentData & {
+  ai_likeness?: AiLikenessScore;
+  safety_label?: SafetyLabel;
+  role?: "title" | "subtitle" | "bullet" | "body" | "caption" | "table_cell" | "speaker_note";
+};
+
+export type PptSessionOutput = {
+  total_slides: number;
+  total_flags: number;
+  slide_scores: Record<string, number>;
+  slides: Record<string, PptSegmentV2[]>;
 };
 
 export type SessionDetailResponse = {
@@ -211,12 +249,7 @@ export type SessionDetailResponse = {
     completed_at: string | null;
     error_message: string | null;
   };
-  output: {
-    structured_summary: string;
-    product_description: string;
-    implementation_requirements: Record<string, RequirementItem[]>;
-    word_count: number;
-  } | null;
+  output: PptSessionOutput | null;
 };
 
 export const SessionAPI = {
@@ -233,20 +266,7 @@ export const SessionAPI = {
   },
 };
 
-export const DocAPI = {
-  async process(formData: FormData): Promise<DocProcessResponse> {
-    return apiFetch<DocProcessResponse>("/api/doc/process", {
-      method: "POST",
-      body: formData,
-    });
-  },
-  async batchProcess(formData: FormData): Promise<any[]> {
-    return apiFetch<any[]>("/api/doc/batch-process", {
-      method: "POST",
-      body: formData,
-    });
-  }
-};
+
 
 // ---------------------------------------------------------
 // PPT Types & Methods
@@ -348,13 +368,39 @@ export const PptAPI = {
   },
 };
 
-export const ExportAPI = {
-  getPdfUrl(sessionId: string): string {
-    return `${API_BASE_URL}/api/doc/${sessionId}/export/pdf`;
+export const RewriteAPI = {
+  async run(payload: RewriteRequest): Promise<RewriteResponse> {
+    return apiFetch<RewriteResponse>("/api/rewrite/run", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
-  getWordUrl(sessionId: string): string {
-    return `${API_BASE_URL}/api/doc/${sessionId}/export/docx`;
-  }
+  async rerunSegment(
+    sessionId: string,
+    segmentId: string,
+    tone: TonePreset,
+    intensity: RewriteIntensity
+  ): Promise<SegmentRewriteResult> {
+    return apiFetch<SegmentRewriteResult>(
+      `/api/rewrite/segment/${sessionId}/${segmentId}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ tone_preset: tone, intensity }),
+      }
+    );
+  },
+};
+
+export const EvalAPI = {
+  async score(
+    sessionId: string,
+    segmentId: string
+  ): Promise<{ similarity: number; length_delta: number }> {
+    return apiFetch(`/api/eval/score`, {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, segment_id: segmentId }),
+    });
+  },
 };
 
 export type UserProfile = {

@@ -77,12 +77,13 @@ Multiple rewrite candidates are generated and ranked by a Judge agent that prior
 
 ### 6. Human-in-the-Loop Review UI
 
-- Per-slide AI-likeness badges with expandable "Why this was flagged" panels.
-- Side-by-side before/after diff view with inline change highlighting.
-- Rewrite intensity selector: `Minimal`, `Balanced`, or `Strong`.
-- One-click revert to original text per slide.
-- Safety labels surface `manual_review` items before export.
-- Tone preset and local model settings persist via `/settings`.
+- **Per-segment AI-likeness Badges:** View the computed AI-likeness score with a distinct band label (low / moderate / high) and the top reason.
+- **Collapsible Rewrite Panel:** Direct tone and intensity controls on the review page to batch-rewrite all flagged segments.
+- **Card-level "Re-run" retries:** Targeted single-segment retries to iterate on individual sentences.
+- **"Why flagged" Expandable Disclosures:** Expandable `<details>` disclosure panels detailing flag type, matched text, explanation, and recommendation.
+- **Slide-wide Progress Bar:** Horizontal progress indicator showing the portion of accepted (teal), rejected (red), and pending (empty) segments.
+- **Safety Overflow Warnings:** `needs_shorter_option` and `manual_review` labels highlighting layout risk. Export is blocked via a confirmation modal when accepted segments contain `manual_review` flags.
+- **Side-by-side Diff View:** Direct side-by-side editing and comparison of original vs rewritten text.
 
 ---
 
@@ -102,6 +103,15 @@ docppt-intelligence-tool/
 ├── render.yaml                # Render deployment Blueprint
 └── README.md
 ```
+
+---
+
+## 🌐 Live Deployment
+
+| Service | URL |
+|---|---|
+| Frontend | https://docppt-frontend.onrender.com/process/ppt |
+| Backend API | https://docppt-backend.onrender.com/docs |
 
 ---
 
@@ -153,6 +163,8 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+> **Gemini BYOK (Bring Your Own Key):** To use Gemini for rewriting, enter your Gemini API key in Settings → Rewrite Preferences. The key is stored in `sessionStorage` only and is encrypted with the backend's RSA public key before transit. If no key is provided, the tool uses the configured local model.
 
 ---
 

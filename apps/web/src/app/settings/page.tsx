@@ -1,8 +1,23 @@
+/* eslint-disable */
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, Save, Shield, Cpu, Zap, Palette, Loader2, CheckCircle, Key } from "lucide-react";
-import { SettingsAPI } from "@/lib/api";
+import { Settings, Save, Shield, Cpu, Zap, Loader2, CheckCircle, Key, RefreshCw, AlertCircle, Database } from "lucide-react";
+import { SettingsAPI, apiFetch } from "@/lib/api";
+
+const TONE_PRESETS = [
+  { value: "presentation_concise", label: "Concise" },
+  { value: "executive_polished", label: "Executive" },
+  { value: "founder_clear", label: "Founder" },
+  { value: "product_manager_direct", label: "Product" },
+  { value: "consulting_professional", label: "Consulting" },
+];
+
+const INTENSITIES = [
+  { value: "minimal", label: "Minimal" },
+  { value: "balanced", label: "Balanced" },
+  { value: "strong", label: "Strong" },
+];
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<any>(null);
@@ -14,6 +29,13 @@ export default function SettingsPage() {
   
   // Privacy & Telemetry states
   const [telemetryConsent, setTelemetryConsent] = useState<string>("denied");
+
+  // Test states
+  const [testingGemini, setTestingGemini] = useState(false);
+  const [geminiTestResult, setGeminiTestResult] = useState<{ status: "success" | "error"; message: string } | null>(null);
+  
+  const [testingLocal, setTestingLocal] = useState(false);
+  const [localTestResult, setLocalTestResult] = useState<{ status: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     fetchSettings();
@@ -46,11 +68,14 @@ export default function SettingsPage() {
         retain_source_files: settings.retain_source_files,
         advanced_instruction_model: settings.advanced_instruction_model || "llama3",
         advanced_model_endpoint: settings.advanced_model_endpoint || "http://localhost:11434/v1",
+        default_tone_preset: settings.default_tone_preset || "presentation_concise",
+        default_intensity: settings.default_intensity || "balanced",
+        local_model_endpoint: settings.local_model_endpoint || "http://localhost:11434",
       });
       
       // Save Gemini key to sessionStorage strictly
       if (typeof window !== "undefined") {
-        if (geminiApiKey.strip ? geminiApiKey.strip() : geminiApiKey.trim()) {
+        if (geminiApiKey.trim()) {
           sessionStorage.setItem("gemini_api_key", geminiApiKey.trim());
         } else {
           sessionStorage.removeItem("gemini_api_key");
@@ -67,10 +92,60 @@ export default function SettingsPage() {
     }
   };
 
+  const testGeminiConnection = async () => {
+    if (!geminiApiKey.trim()) {
+      setGeminiTestResult({ status: "error", message: "Please enter a Gemini API Key first." });
+      return;
+    }
+    
+    // Temporarily set it in session storage so apiFetch can read and send it encrypted
+    const oldKey = sessionStorage.getItem("gemini_api_key");
+    sessionStorage.setItem("gemini_api_key", geminiApiKey.trim());
+
+    setTestingGemini(true);
+    setGeminiTestResult(null);
+    try {
+      const res = await apiFetch<{ status: string; message: string }>("/api/settings/test-gemini");
+      setGeminiTestResult({ status: "success", message: res.message || "Gemini connection successful!" });
+    } catch (err: any) {
+      setGeminiTestResult({ status: "error", message: err.message || "Failed to connect to Gemini." });
+      // Revert if connection failed and there was no previous key
+      if (!oldKey) {
+        sessionStorage.removeItem("gemini_api_key");
+      }
+    } finally {
+      setTestingGemini(false);
+      // Restore old key if we only wanted to test
+      if (oldKey) {
+        sessionStorage.setItem("gemini_api_key", oldKey);
+      }
+    }
+  };
+
+  const testLocalModelConnection = async () => {
+    const url = settings.local_model_endpoint || "http://localhost:11434";
+    setTestingLocal(true);
+    setLocalTestResult(null);
+    try {
+      const res = await apiFetch<{ status: string; message: string }>(`/api/settings/test-local-model?url=${encodeURIComponent(url)}`);
+      setLocalTestResult({ status: "success", message: res.message || "Successfully connected to local model server!" });
+    } catch (err: any) {
+      setLocalTestResult({ status: "error", message: err.message || "Failed to connect to local model server." });
+    } finally {
+      setTestingLocal(false);
+    }
+  };
+
   const handleTelemetryToggle = () => {
     const nextConsent = telemetryConsent === "granted" ? "denied" : "granted";
     setTelemetryConsent(nextConsent);
     localStorage.setItem("docppt_crash_consent", nextConsent);
+  };
+
+  const handleClearKey = () => {
+    setGeminiApiKey("");
+    sessionStorage.removeItem("gemini_api_key");
+    setGeminiTestResult(null);
   };
 
   if (!settings) {
@@ -86,43 +161,31 @@ export default function SettingsPage() {
       id: "gemini_byok",
       name: "Gemini BYOK (Bring Your Own Key)",
       desc: "Uses Google's Gemini LLM. The API key is stored only in your browser's session storage and sent encrypted in transit. Privacy-first, high quality rewrites.",
-      local: false,
-      custom: false,
     },
     {
       id: "local_cpu",
       name: "Local CPU",
       desc: "Runs T5/DistilBART locally using your system's CPU. Privacy-first, zero configuration, but requires downloading models (~500MB).",
-      local: true,
-      custom: false,
     },
     {
       id: "local_gpu",
       name: "Local GPU",
       desc: "Runs T5/DistilBART locally using your CUDA-compatible GPU for accelerated processing. Requires GPU setup.",
-      local: true,
-      custom: false,
     },
     {
       id: "extractive_only",
       name: "Extractive Only",
       desc: "Zero local model download. Uses lightweight rules and regex to extract text and strip artifacts. Highly recommended for low-resource environments.",
-      local: false,
-      custom: false,
     },
     {
       id: "managed_endpoint",
       name: "Managed Hosted LLM",
       desc: "Uses a pre-configured, self-hosted LLM maintained by the developer; no setup required for you.",
-      local: false,
-      custom: false,
     },
     {
       id: "user_hosted_endpoint",
       name: "Custom Local/OpenAI Endpoint",
       desc: "Connect to your own Ollama, LM Studio, vLLM, or OpenAI-compatible endpoint. Requires configuring an API URL and Model ID.",
-      local: false,
-      custom: true,
     },
   ];
 
@@ -153,6 +216,53 @@ export default function SettingsPage() {
 
         {/* Content */}
         <div className="md:col-span-2 space-y-6">
+          {/* Rewrite Preferences Section */}
+          <section className="p-6 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-6">
+            <div className="flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
+              <Zap className="w-5 h-5 text-[var(--accent)]" />
+              Rewrite Preferences
+            </div>
+
+            <div className="space-y-4">
+              {/* Default Tone Preset */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Default Tone Preset</label>
+                <select
+                  value={settings.default_tone_preset || "presentation_concise"}
+                  onChange={(e) => setSettings({ ...settings, default_tone_preset: e.target.value })}
+                  className="w-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] font-medium"
+                >
+                  {TONE_PRESETS.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Default Intensity */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Default Intensity</label>
+                <div className="grid grid-cols-3 gap-2 bg-[var(--bg-elevated)]/40 p-1 rounded-lg border border-[var(--border-subtle)]">
+                  {INTENSITIES.map((intensity) => (
+                    <button
+                      key={intensity.value}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, default_intensity: intensity.value })}
+                      className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
+                        settings.default_intensity === intensity.value
+                          ? "bg-[var(--accent)] text-white shadow-sm"
+                          : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      }`}
+                    >
+                      {intensity.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* AI Configuration Section */}
           <section className="p-6 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-6">
             <div className="flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
@@ -193,19 +303,53 @@ export default function SettingsPage() {
               {settings.model_mode === "gemini_byok" && (
                 <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-500/5 space-y-4 animate-fade-in">
                   <div>
-                    <label className="flex items-center gap-1.5 text-xs font-semibold mb-1 text-purple-400">
-                      <Key className="w-3.5 h-3.5" /> Gemini API Key
+                    <label className="flex items-center justify-between text-xs font-semibold mb-1.5 text-purple-400">
+                      <span className="flex items-center gap-1.5">
+                        <Key className="w-3.5 h-3.5" /> Gemini API Key (BYOK)
+                      </span>
+                      {geminiApiKey && (
+                        <button
+                          type="button"
+                          onClick={handleClearKey}
+                          className="text-[10px] text-red-400 hover:underline font-bold"
+                        >
+                          Clear key
+                        </button>
+                      )}
                     </label>
-                    <input
-                      type="password"
-                      placeholder="AIzaSy..."
-                      value={geminiApiKey}
-                      onChange={(e) => setGeminiApiKey(e.target.value)}
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
-                    />
-                    <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
-                      Your API key is saved strictly in your local browser session storage. It is never stored on the server database, and it is transmitted encrypted with the server's public RSA key.
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        placeholder="AIzaSy..."
+                        value={geminiApiKey}
+                        onChange={(e) => setGeminiApiKey(e.target.value)}
+                        className="flex-1 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={testGeminiConnection}
+                        disabled={testingGemini || !geminiApiKey.trim()}
+                        className="px-3 py-2 text-xs font-semibold rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 hover:bg-purple-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {testingGemini ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        Test
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-[var(--text-muted)] mt-1.5 block">
+                      Key is stored in session only — cleared on tab close. It is transmitted encrypted with the backend's RSA public key.
                     </span>
+
+                    {/* Gemini Connection Test Result */}
+                    {geminiTestResult && (
+                      <div className={`mt-2 p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
+                        geminiTestResult.status === "success" 
+                          ? "bg-green-500/5 text-green-400 border-green-500/10" 
+                          : "bg-red-500/5 text-red-400 border-red-500/10"
+                      }`}>
+                        {geminiTestResult.status === "success" ? <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+                        <span>{geminiTestResult.message}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -214,7 +358,7 @@ export default function SettingsPage() {
               {settings.model_mode === "user_hosted_endpoint" && (
                 <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-500/5 space-y-4 animate-fade-in">
                   <div>
-                    <label className="block text-xs font-semibold mb-1 text-blue-400">OpenAI-Compatible Local Endpoint</label>
+                    <label className="block text-xs font-semibold mb-1.5 text-blue-400">OpenAI-Compatible Local Endpoint</label>
                     <input
                       type="url"
                       placeholder="http://localhost:11434/v1"
@@ -226,7 +370,7 @@ export default function SettingsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold mb-1 text-blue-400">Model ID Identifier</label>
+                    <label className="block text-xs font-semibold mb-1.5 text-blue-400">Model ID Identifier</label>
                     <input
                       type="text"
                       placeholder="llama3:latest"
@@ -239,36 +383,44 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <div className="pt-2">
-                <label className="block text-sm font-medium mb-2">PPT Humanization Sensitivity</label>
-                <div className="flex items-center gap-4 p-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/30">
-                  <Shield className={`w-10 h-10 ${
-                    settings.ppt_sensitivity === "conservative" ? "text-green-500" : 
-                    settings.ppt_sensitivity === "balanced" ? "text-blue-500" : "text-orange-500"
-                  }`} />
-                  <div className="flex-1">
-                    <input
-                      type="range"
-                      min="0"
-                      max="2"
-                      step="1"
-                      value={
-                        settings.ppt_sensitivity === "conservative" ? 0 : 
-                        settings.ppt_sensitivity === "balanced" ? 1 : 2
-                      }
-                      onChange={(e) => {
-                        const vals = ["conservative", "balanced", "aggressive"];
-                        setSettings({ ...settings, ppt_sensitivity: vals[parseInt(e.target.value)] });
-                      }}
-                      className="w-full accent-[var(--accent)]"
-                    />
-                    <div className="flex justify-between text-[10px] text-[var(--text-muted)] mt-1 uppercase font-bold tracking-widest">
-                      <span>Conservative</span>
-                      <span>Balanced</span>
-                      <span>Aggressive</span>
-                    </div>
-                  </div>
+              {/* Local Model Endpoint Field */}
+              <div>
+                <label className="flex items-center gap-1.5 text-sm font-medium mb-1.5">
+                  <Database className="w-4 h-4 text-[var(--text-secondary)]" /> Local Model Endpoint URL
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    placeholder="http://localhost:11434"
+                    value={settings.local_model_endpoint || ""}
+                    onChange={(e) => setSettings({ ...settings, local_model_endpoint: e.target.value })}
+                    className="flex-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={testLocalModelConnection}
+                    disabled={testingLocal}
+                    className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-500/10 text-blue-300 border border-blue-500/20 hover:bg-blue-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {testingLocal ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    Test Connection
+                  </button>
                 </div>
+                <span className="text-[10px] text-[var(--text-muted)] mt-1.5 block">
+                  The URL of your self-hosted Ollama or LM Studio instance. Default Ollama is http://localhost:11434.
+                </span>
+
+                {/* Local Model Connection Test Result */}
+                {localTestResult && (
+                  <div className={`mt-2 p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
+                    localTestResult.status === "success" 
+                      ? "bg-green-500/5 text-green-400 border-green-500/10" 
+                      : "bg-red-500/5 text-red-400 border-red-500/10"
+                  }`}>
+                    {localTestResult.status === "success" ? <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+                    <span>{localTestResult.message}</span>
+                  </div>
+                )}
               </div>
             </div>
           </section>

@@ -35,7 +35,7 @@ export default function SettingsPage() {
   const [geminiTestResult, setGeminiTestResult] = useState<{ status: "success" | "error"; message: string } | null>(null);
   
   const [testingLocal, setTestingLocal] = useState(false);
-  const [localTestResult, setLocalTestResult] = useState<{ status: "success" | "error"; message: string } | null>(null);
+  const [localTestResult, setLocalTestResult] = useState<{ status: "success" | "error" | "not_running"; message: string } | null>(null);
 
   useEffect(() => {
     fetchSettings();
@@ -127,8 +127,8 @@ export default function SettingsPage() {
     setTestingLocal(true);
     setLocalTestResult(null);
     try {
-      const res = await apiFetch<{ status: string; message: string }>(`/api/settings/test-local-model?url=${encodeURIComponent(url)}`);
-      setLocalTestResult({ status: "success", message: res.message || "Successfully connected to local model server!" });
+      const res = await apiFetch<{ status: "success" | "not_running" | "error"; message: string }>(`/api/settings/test-local-model?url=${encodeURIComponent(url)}`);
+      setLocalTestResult({ status: res.status, message: res.message || "Successfully connected to local model server!" });
     } catch (err: any) {
       setLocalTestResult({ status: "error", message: err.message || "Failed to connect to local model server." });
     } finally {
@@ -415,10 +415,20 @@ export default function SettingsPage() {
                   <div className={`mt-2 p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
                     localTestResult.status === "success" 
                       ? "bg-green-500/5 text-green-400 border-green-500/10" 
+                      : localTestResult.status === "not_running"
+                      ? "bg-amber-500/5 text-amber-400 border-amber-500/10"
                       : "bg-red-500/5 text-red-400 border-red-500/10"
                   }`}>
-                    {localTestResult.status === "success" ? <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-                    <span>{localTestResult.message}</span>
+                    {localTestResult.status === "success" ? (
+                      <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    )}
+                    <span>
+                      {localTestResult.status === "not_running"
+                        ? "No server found at this address. Make sure Ollama or LM Studio is running locally."
+                        : localTestResult.message}
+                    </span>
                   </div>
                 )}
               </div>

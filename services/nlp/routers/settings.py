@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session as DBSession
 from pydantic import BaseModel
 import uuid
 import urllib.request
+import urllib.error
 import json
 
 from database import get_db
@@ -73,7 +74,7 @@ def test_gemini(request: Request):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to decrypt Gemini API Key: {str(e)}")
         
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     payload = {
         "contents": [{
             "parts": [{"text": "Hello, respond with exact word 'Connected'."}]
@@ -89,7 +90,21 @@ def test_gemini(request: Request):
         )
         with urllib.request.urlopen(req, timeout=10) as response:
             res_data = json.loads(response.read().decode("utf-8"))
+            if res_data.get("error"):
+                error_msg = res_data["error"].get("message", "Unknown Gemini API error")
+                raise HTTPException(status_code=400, detail=f"Gemini API error: {error_msg}")
             return {"status": "success", "message": "Gemini connection successful."}
+    except urllib.error.HTTPError as he:
+        try:
+            err_body = he.read().decode("utf-8")
+            err_json = json.loads(err_body)
+            if "error" in err_json:
+                error_msg = err_json["error"].get("message", err_body)
+            else:
+                error_msg = err_body
+        except Exception:
+            error_msg = str(he)
+        raise HTTPException(status_code=he.code, detail=f"Gemini connection failed: {error_msg}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gemini connection failed: {str(e)}")
 
@@ -110,7 +125,51 @@ def test_local_model(url: str):
                         return {"status": "success", "message": f"Successfully connected to local model server at {test_url}"}
             except Exception as conn_err:
                 last_error = conn_err
+        
+        # Check if the last error represents a connection refused (Errno 111 / 61)
+        err_str = str(last_error).lower()
+        is_conn_refused = False
+        if isinstance(last_error, ConnectionRefusedError):
+            is_conn_refused = True
+        elif isinstance(last_error, urllib.error.URLError):
+            reason = last_error.reason
+            if isinstance(reason, OSError):
+                if reason.errno in (111, 61) or isinstance(reason, ConnectionRefusedError):
+                    is_conn_refused = True
+        elif isinstance(last_error, OSError) and getattr(last_error, 'errno', None) in (111, 61):
+            is_conn_refused = True
+        
+        if not is_conn_refused and ("errno 111" in err_str or "errno 61" in err_str or "connection refused" in err_str):
+            is_conn_refused = True
+
+        if is_conn_refused:
+            return {
+                "status": "not_running",
+                "message": "No model server found at this address. Start Ollama or LM Studio locally and try again."
+            }
+
         raise HTTPException(status_code=500, detail=f"Could not connect to model server. Error: {str(last_error)}")
     except Exception as e:
+        err_str = str(e).lower()
+        is_conn_refused = False
+        if isinstance(e, ConnectionRefusedError):
+            is_conn_refused = True
+        elif isinstance(e, urllib.error.URLError):
+            reason = e.reason
+            if isinstance(reason, OSError):
+                if reason.errno in (111, 61) or isinstance(reason, ConnectionRefusedError):
+                    is_conn_refused = True
+        elif isinstance(e, OSError) and getattr(e, 'errno', None) in (111, 61):
+            is_conn_refused = True
+
+        if not is_conn_refused and ("errno 111" in err_str or "errno 61" in err_str or "connection refused" in err_str):
+            is_conn_refused = True
+
+        if is_conn_refused:
+            return {
+                "status": "not_running",
+                "message": "No model server found at this address. Start Ollama or LM Studio locally and try again."
+            }
         raise HTTPException(status_code=500, detail=f"Local model connection failed: {str(e)}")
+
 

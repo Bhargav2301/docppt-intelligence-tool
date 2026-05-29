@@ -1,7 +1,7 @@
 import os
 
-# Options: 'local_cpu', 'local_gpu', 'extractive_only', 'user_hosted_endpoint', 'managed_endpoint'
-MODEL_MODE = os.getenv("MODEL_MODE", "extractive_only")
+# Options: 'gemini_byok'
+MODEL_MODE = os.getenv("MODEL_MODE", "gemini_byok")
 
 # Models configured from environment or defaults (from TRD)
 SUMMARIZATION_MODEL = os.getenv("SUMMARIZATION_MODEL", "sshleifer/distilbart-cnn-12-6")

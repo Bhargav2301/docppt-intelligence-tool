@@ -6,12 +6,21 @@ from runtime.fallback import safe_perplexity
 
 logger = logging.getLogger(__name__)
 
+import difflib
+
 def calculate_similarity(source_text: str, generated_text: str) -> float:
     """
-    Computes cosine similarity between source and generated text using the embedding model.
-    Returns 0.0 since embedding model is unavailable.
+    Computes sequence similarity between source and generated text using difflib.SequenceMatcher.
     """
-    return 0.0
+    if not source_text and not generated_text:
+        return 1.0
+    if not source_text or not generated_text:
+        return 0.0
+    s1 = source_text.strip()
+    s2 = generated_text.strip()
+    if s1 == s2:
+        return 1.0
+    return difflib.SequenceMatcher(None, s1, s2).ratio()
 
 @safe_perplexity
 def calculate_perplexity(text: str) -> Dict[str, Any]:

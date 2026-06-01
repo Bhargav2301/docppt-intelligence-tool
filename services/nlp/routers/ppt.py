@@ -227,13 +227,65 @@ async def process_single_ppt_internal(
                     
                 # Add AI likeness warning flag
                 if ai_res.band in ("moderate", "high"):
-                    seg_flags.append({
-                        "type": "ai_likeness_risk",
-                        "severity": "medium" if ai_res.band == "moderate" else "high",
-                        "span": norm,
-                        "explanation": f"AI-likeness band is {ai_res.band} (score: {ai_res.score}). Reasons: {', '.join(ai_res.reasons)}",
-                        "recommendation": "Rewrite to sound more natural and conversational."
-                    })
+                    import re
+                    from app.detector.features import find_generic_phrases_present, VAGUE_MODIFIERS, find_discourse_markers_present
+                    
+                    found_any_specific = False
+                    
+                    # Highlight generic phrases
+                    found_generics = find_generic_phrases_present(norm)
+                    for gp in found_generics:
+                        orig_match = re.search(rf'\b{re.escape(gp)}\b', norm, re.IGNORECASE)
+                        span_val = orig_match.group(0) if orig_match else gp
+                        seg_flags.append({
+                            "type": "generic_business_phrase",
+                            "severity": "medium" if ai_res.band == "moderate" else "high",
+                            "span": span_val,
+                            "explanation": f"Generic business phrase detected: '{span_val}'",
+                            "recommendation": "Replace with a concrete capability statement or specific business metric."
+                        })
+                        found_any_specific = True
+                        
+                    # Highlight vague modifiers
+                    found_vague = [w for w in re.findall(r'\b[a-zA-Z]+\b', norm.lower()) if w in VAGUE_MODIFIERS]
+                    seen_vague = set()
+                    for vm in found_vague:
+                        if vm not in seen_vague:
+                            seen_vague.add(vm)
+                            orig_match = re.search(rf'\b{re.escape(vm)}\b', norm, re.IGNORECASE)
+                            span_val = orig_match.group(0) if orig_match else vm
+                            seg_flags.append({
+                                "type": "vague_modifier",
+                                "severity": "medium",
+                                "span": span_val,
+                                "explanation": f"Vague modifier detected: '{span_val}'",
+                                "recommendation": "Replace with a specific, quantitative metric."
+                            })
+                            found_any_specific = True
+                            
+                    # Highlight discourse markers
+                    found_discourse = find_discourse_markers_present(norm)
+                    for dm in found_discourse:
+                        orig_match = re.search(rf'\b{re.escape(dm)}\b', norm, re.IGNORECASE)
+                        span_val = orig_match.group(0) if orig_match else dm
+                        seg_flags.append({
+                            "type": "robotic_transition",
+                            "severity": "medium",
+                            "span": span_val,
+                            "explanation": f"Robotic transition/discourse marker detected: '{span_val}'",
+                            "recommendation": "Remove or simplify this transition."
+                        })
+                        found_any_specific = True
+                        
+                    # Fallback general flag if no specific pattern was extracted but score is high
+                    if not found_any_specific:
+                        seg_flags.append({
+                            "type": "ai_likeness_risk",
+                            "severity": "medium" if ai_res.band == "moderate" else "high",
+                            "span": norm,
+                            "explanation": f"AI-likeness band is {ai_res.band} (score: {ai_res.score}). Reasons: {', '.join(ai_res.reasons)}",
+                            "recommendation": "Rewrite to sound more natural and conversational."
+                        })
                 
                 if seg_flags:
                     seg.setdefault("flags", []).extend(seg_flags)

@@ -68,7 +68,7 @@ DISCOURSE_MARKERS: List[str] = [
 # Helpers
 # ---------------------------------------------------------------------------
 
-_SENTENCE_SPLIT_RE = re.compile(r'[.!?]+')
+_SENTENCE_SPLIT_RE = re.compile(r'(?<!\d)\.(?!\d)|[!?]+')
 
 
 def _split_sentences(text: str) -> List[str]:
@@ -205,13 +205,11 @@ AI_SLOGAN_PATTERNS: List[str] = [
     r"(?i)-\s*not\s+a\b",
     r"(?i)—\s*not\s+just\b",
     r"(?i)-\s*not\s+just\b",
-    r"(?i)\bnot\s+on\b",
-    r"(?i)\bnot\s+in\b",
     # Tool combinations: "Tally + Excel", "Excel + WhatsApp", "Excel + Tally"
     r"(?i)\w+\s*\+\s*\w+",
     # Rhythm-heavy triads: e.g. "Six modules. One platform. No data islands."
-    # We can detect this structural pattern: three short phrases separated by periods/dashes
-    r"(?i)^[^.!?]+[.!?]\s*[^.!?]+[.!?]\s*[^.!?]+[.!?]$",
+    # We detect this by matching exactly three short phrases (under 35 chars each) separated by punctuation
+    r"(?i)^[^.!?]{1,35}[.!?]\s*[^.!?]{1,35}[.!?]\s*[^.!?]{1,35}[.!?]$",
     # Repeated listing patterns like "by ..., by ..., by ..."
     r"(?i)\bby\s+\w+(?:,\s*by\s+\w+){2,}\b",
     r"(?i)\bby\s+\w+,\s*by\s+\w+\b",

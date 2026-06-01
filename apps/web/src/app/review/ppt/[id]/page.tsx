@@ -236,14 +236,34 @@ export default function PPTReview({
   };
 
   const handleAcceptAll = () => {
+    const allSegs = Object.values(slides).flat();
+    const flaggedSegs = allSegs.filter((s) => s.flags && s.flags.length > 0);
+    const withChanges = flaggedSegs.filter((s) => s.final_text && s.final_text !== s.original_text);
+    const noChanges = flaggedSegs.length - withChanges.length;
+
+    const msg = `Are you sure you want to Accept All suggested changes?\n\n` +
+      `- Total flagged segments: ${flaggedSegs.length}\n` +
+      `- Segments with actual improvements: ${withChanges.length}\n` +
+      `- Segments with no suggested changes: ${noChanges}\n\n` +
+      `Only segments with actual improvements will be updated. Proceed?`;
+
+    if (!window.confirm(msg)) {
+      return;
+    }
+
     setSlides((prev) => {
       const next = { ...prev };
       for (const key of Object.keys(next)) {
-        next[key] = next[key].map((seg) => ({
-          ...seg,
-          localDecision:
-            seg.localDecision === "rejected" ? "rejected" : "accepted",
-        }));
+        next[key] = next[key].map((seg) => {
+          const hasEdit = seg.final_text && seg.final_text !== seg.original_text;
+          if (hasEdit && seg.localDecision === "pending") {
+            return {
+              ...seg,
+              localDecision: "accepted",
+            };
+          }
+          return seg;
+        });
       }
       return next;
     });
@@ -696,11 +716,14 @@ function SegmentCard({
       {/* Role + Flags + Safety Badge + Actions */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Segment Role label */}
+          {/* Segment Role label & visual layout context */}
           {seg.role && (
-            <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] bg-[var(--bg-elevated)] px-2 py-0.5 rounded border border-[var(--border-subtle)]">
-              {seg.role.replace(/_/g, " ")}
-            </span>
+            <div className="flex items-center gap-2">
+              <SlideVisualIndicator role={seg.role} />
+              <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] bg-[var(--bg-elevated)] px-2 py-0.5 rounded border border-[var(--border-subtle)]">
+                {seg.role.replace(/_/g, " ")}
+              </span>
+            </div>
           )}
 
           {seg.flags.map((flag, i) => (
@@ -814,7 +837,7 @@ function SegmentCard({
 
       {/* "Why flagged" expandable disclosures panel */}
       {seg.flags.length > 0 && (
-        <details className="text-xs border border-[var(--border-subtle)] rounded-lg p-2.5 bg-[var(--bg-base)]/40">
+        <details open className="text-xs border border-[var(--border-subtle)] rounded-lg p-2.5 bg-[var(--bg-base)]/40">
           <summary className="cursor-pointer font-semibold select-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
             Why this was flagged
           </summary>
@@ -846,15 +869,15 @@ function SegmentCard({
         <div className="space-y-3">
           <div>
             <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
-              Original Text
+              Original Text (deletions / flags highlighted)
             </h4>
             <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-              {seg.original_text}
+              {renderOriginalDiff(seg.original_text, editText, seg.flags)}
             </p>
           </div>
           <div>
             <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
-              Your Edit
+              Your Edit (additions highlighted)
             </h4>
             <textarea
               value={editText}
@@ -884,9 +907,13 @@ function SegmentCard({
             <h4 className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
               Original Text
             </h4>
-            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-              {seg.original_text}
-            </p>
+            <div className="text-sm text-[var(--text-secondary)] leading-relaxed">
+              {renderOriginalDiff(
+                seg.original_text,
+                seg.localDecision === "edited" ? seg.editedText : seg.final_text || seg.original_text,
+                seg.flags
+              )}
+            </div>
           </div>
           <div className="space-y-1">
             <h4 className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
@@ -894,11 +921,12 @@ function SegmentCard({
                 ? "Your Edit"
                 : "Suggested Rewrite"}
             </h4>
-            <p className="text-sm text-[var(--text-primary)] font-medium leading-relaxed">
-              {seg.localDecision === "edited"
-                ? seg.editedText
-                : seg.final_text || seg.original_text}
-            </p>
+            <div className="text-sm text-[var(--text-primary)] font-medium leading-relaxed">
+              {renderModifiedDiff(
+                seg.original_text,
+                seg.localDecision === "edited" ? seg.editedText : seg.final_text || seg.original_text
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -910,6 +938,129 @@ function SegmentCard({
           <span className="text-[var(--text-secondary)]">{(seg.eval_scores.similarity * 100).toFixed(1)}%</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ================================================================
+   Diff Utility Functions (LCS Word-level Diff)
+   ================================================================ */
+
+interface DiffToken {
+  type: 'added' | 'removed' | 'common';
+  value: string;
+}
+
+function diffWords(original: string, modified: string): DiffToken[] {
+  const origWords = original.split(/(\s+)/);
+  const modWords = modified.split(/(\s+)/);
+  
+  const n = origWords.length;
+  const m = modWords.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+  
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      if (origWords[i - 1] === modWords[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+  
+  const diff: DiffToken[] = [];
+  let i = n, j = m;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && origWords[i - 1] === modWords[j - 1]) {
+      diff.unshift({ type: 'common', value: origWords[i - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      diff.unshift({ type: 'added', value: modWords[j - 1] });
+      j--;
+    } else {
+      diff.unshift({ type: 'removed', value: origWords[i - 1] });
+      i--;
+    }
+  }
+  
+  return diff;
+}
+
+function renderOriginalDiff(original: string, modified: string, flags: any[]) {
+  const diffs = diffWords(original, modified);
+  const flaggedSpans = flags
+    .map(f => (f.span || f.matched_text || '').toLowerCase().trim())
+    .filter(s => s.length > 2);
+    
+  return (
+    <>
+      {diffs.map((d, idx) => {
+        if (d.type === 'removed') {
+          return (
+            <span key={idx} className="bg-red-500/20 text-red-700 dark:text-red-400 line-through px-0.5 rounded">
+              {d.value}
+            </span>
+          );
+        } else if (d.type === 'common') {
+          const isFlagged = flaggedSpans.some(span => span.includes(d.value.toLowerCase().trim()));
+          if (isFlagged && d.value.trim().length > 0) {
+            return (
+              <span key={idx} className="bg-yellow-500/20 border-b border-dashed border-yellow-500 text-yellow-800 dark:text-yellow-200 px-0.5" title="Flagged phrase">
+                {d.value}
+              </span>
+            );
+          }
+          return <span key={idx}>{d.value}</span>;
+        }
+        return null;
+      })}
+    </>
+  );
+}
+
+function renderModifiedDiff(original: string, modified: string) {
+  const diffs = diffWords(original, modified);
+  return (
+    <>
+      {diffs.map((d, idx) => {
+        if (d.type === 'added') {
+          return (
+            <span key={idx} className="bg-green-500/20 text-green-700 dark:text-green-400 font-semibold px-0.5 rounded">
+              {d.value}
+            </span>
+          );
+        } else if (d.type === 'common') {
+          return <span key={idx}>{d.value}</span>;
+        }
+        return null;
+      })}
+    </>
+  );
+}
+
+function SlideVisualIndicator({ role }: { role: string }) {
+  return (
+    <div className="w-8 h-5 border border-[var(--border-subtle)] rounded bg-[var(--bg-base)]/40 p-0.5 flex flex-col justify-between flex-shrink-0" title={`Role: ${role.replace(/_/g, ' ')}`}>
+      {/* Title bar */}
+      <div className={`h-[2px] w-full rounded-sm ${role === 'title' ? 'bg-[var(--accent)]' : 'bg-[var(--border-subtle)]/40'}`} />
+      
+      {/* Center content */}
+      <div className="flex-1 flex gap-0.5 mt-[2px] items-center">
+        {/* Left column (bullets) */}
+        <div className="flex-1 flex flex-col gap-[1px] justify-center">
+          <div className={`h-[1px] w-4/5 rounded-sm ${role === 'bullet' ? 'bg-[var(--accent)]/80' : 'bg-[var(--border-subtle)]/20'}`} />
+          <div className={`h-[1px] w-3/4 rounded-sm ${role === 'bullet' ? 'bg-[var(--accent)]/80' : 'bg-[var(--border-subtle)]/20'}`} />
+        </div>
+        {/* Right column (body) */}
+        <div className="flex-1 flex flex-col justify-center">
+          <div className={`h-[3px] w-full rounded-sm ${role === 'body' ? 'bg-[var(--accent)]/60' : 'bg-[var(--border-subtle)]/25'}`} />
+        </div>
+      </div>
+      
+      {/* Speaker notes (footer) */}
+      <div className={`h-[2px] w-full rounded-sm mt-[2px] ${role === 'speaker_note' ? 'bg-[var(--accent)]' : 'bg-[var(--border-subtle)]/15'}`} />
     </div>
   );
 }

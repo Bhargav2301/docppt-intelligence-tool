@@ -6,6 +6,8 @@ short-text dampening, and three-band classification (low / moderate / high).
 
 from __future__ import annotations
 
+import re
+
 from .explanations import generate_reasons
 from .features import (
     compute_burstiness_score,
@@ -19,6 +21,50 @@ from .features import (
 )
 from .schemas import AILikenessResult, FeatureValues
 
+def is_url(text: str) -> bool:
+    clean = text.strip()
+    if " " in clean:
+        return False
+    if "@" in clean:
+        return True
+    if clean.lower().startswith(("www.", "http://", "https://")):
+        return True
+    if re.match(r'^[a-zA-Z0-9-]+\.[a-zA-Z]{2,6}(?:/.*)?$', clean):
+        return True
+    return False
+
+def is_metric_or_stat(text: str) -> bool:
+    clean = text.strip()
+    if not any(c.isdigit() for c in clean):
+        return False
+    
+    stripped = re.sub(r'[\d%\$\+\-\/><=\.,:;!#\(\)]', '', clean)
+    stripped_words = [w.lower() for w in re.findall(r'\b[a-zA-Z]+\b', stripped)]
+    
+    if not stripped_words:
+        return True
+        
+    COMMON_STAT_LABELS = {
+        "businesses", "regions", "days", "minutes", "mins", "hours", "hrs",
+        "weeks", "months", "years", "slide", "slides", "pages", "page",
+        "percent", "percentage", "sec", "seconds", "secs", "people", "clients",
+        "users", "customers", "countries", "regions", "offices", "sites", "sources", "buyers",
+        "quotations", "quoted"
+    }
+    
+    if len(stripped_words) <= 2 and all(w in COMMON_STAT_LABELS for w in stripped_words):
+        return True
+        
+    return False
+
+def is_short_label(text: str) -> bool:
+    words = text.strip().split()
+    if len(words) <= 3:
+        lower_words = [w.lower() for w in words]
+        common_verbs = {"is", "are", "was", "were", "has", "have", "do", "does", "been", "go", "went"}
+        if not any(v in lower_words for v in common_verbs):
+            return True
+    return False
 
 def compute_ai_likeness(text: str, intensity: str = "balanced") -> AILikenessResult:
     """Compute the AI-likeness score for *text*.
@@ -38,6 +84,28 @@ def compute_ai_likeness(text: str, intensity: str = "balanced") -> AILikenessRes
         An :class:`AILikenessResult` containing score, band, reasons,
         and the raw feature values.
     """
+    # ------------------------------------------------------------------
+    # 0. Pre-classification bypass checks
+    # ------------------------------------------------------------------
+    if is_url(text) or is_metric_or_stat(text) or is_short_label(text):
+        return AILikenessResult(
+            score=0.0,
+            band="low",
+            reasons=[],
+            feature_values=FeatureValues(
+                sentence_count=1,
+                avg_sentence_length=len(text.split()),
+                sentence_length_std=0.0,
+                type_token_ratio=1.0,
+                flesch_kincaid=0.0,
+                trigram_repeat_rate=0.0,
+                generic_phrase_density=0.0,
+                passive_voice_ratio=0.0,
+                vague_modifier_ratio=0.0,
+                repeated_opener_ratio=0.0,
+            )
+        )
+
     # ------------------------------------------------------------------
     # 1. Compute individual feature scores
     # ------------------------------------------------------------------
@@ -68,6 +136,11 @@ def compute_ai_likeness(text: str, intensity: str = "balanced") -> AILikenessRes
     # Clamp to [0, 1]
     score = max(0.0, min(1.0, raw_score))
 
+    # Scale down score for concrete, factual narrative prose (no generic phrases and low vague modifiers ratio)
+    is_narrative = (generic == 0.0 and specificity <= 0.05)
+    if is_narrative:
+        score = score * 0.2
+
     # ------------------------------------------------------------------
     # 3. Short-text dampening
     # ------------------------------------------------------------------
@@ -93,7 +166,9 @@ def compute_ai_likeness(text: str, intensity: str = "balanced") -> AILikenessRes
     # ------------------------------------------------------------------
     # 4. Band assignment
     # ------------------------------------------------------------------
-    if intensity == "strong":
+    if is_narrative:
+        band = "low"
+    elif intensity == "strong":
         # Lower thresholds so more things get flagged under "strong"
         if score <= 0.15:
             band = "low"

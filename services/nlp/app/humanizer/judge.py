@@ -4,7 +4,35 @@ from .editorial_rules import apply_all_editorial_rules, BRITISH_TO_AMERICAN, _EM
 from analysis.evaluator import calculate_similarity
 
 # Hallucination threshold
-SIMILARITY_THRESHOLD = 0.65
+SIMILARITY_THRESHOLD = 0.25
+
+ENTITY_WHITELIST = {
+    "absolin", "focus", "x", "haccp", "whatsapp", "excel", "word", "powerpoint", "pdf",
+    "mon", "tue", "wed", "thu", "fri", "sat", "sun", "monday", "tuesday", "wednesday",
+    "thursday", "friday", "saturday", "sunday", "january", "february", "march", "april",
+    "may", "june", "july", "august", "september", "october", "november", "december",
+    "us", "uk", "eu", "aswell", "co2", "tally"
+}
+
+NUMBER_MAP = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5
+}
+
+def _extract_number_values(text: str) -> set:
+    vals = set()
+    # Extract digits
+    for m in re.finditer(r'\b\d+(?:\.\d+)?\b', text):
+        try:
+            vals.add(float(m.group(0)))
+        except ValueError:
+            pass
+    # Extract words
+    for word in re.findall(r'\b[a-zA-Z]+\b', text.lower()):
+        if word in NUMBER_MAP:
+            vals.add(float(NUMBER_MAP[word]))
+    return vals
 
 def _get_entities(text: str) -> set:
     """Helper to extract named entities (capitalized words that are not the first word of a sentence)."""
@@ -69,14 +97,22 @@ def judge_candidates(
         if _has_british_spelling(text):
             continue
             
-        # 5. Number preservation check: Reject if numbers were modified, added, or deleted
-        candidate_numbers = set(re.findall(r'\d+', text))
-        if original_numbers != candidate_numbers:
+        # 5. Number preservation check: Reject if new numbers were introduced.
+        # We allow numbers to be converted (e.g. "three" -> "3") or omitted.
+        orig_nums = _extract_number_values(original_text)
+        cand_nums = _extract_number_values(text)
+        new_nums = cand_nums - orig_nums
+        if new_nums:
             continue
             
-        # 6. Entity preservation check: Reject if new named entities/facts were introduced
+        # 6. Entity preservation check: Reject if new named entities/facts were introduced.
+        # Exclude whitelisted terms and words that were already present in any case in the original.
         candidate_entities = _get_entities(text)
-        new_entities = candidate_entities - original_entities
+        original_words = set(re.findall(r'\b[a-zA-Z]+\b', original_text.lower()))
+        new_entities = []
+        for ent in candidate_entities:
+            if ent not in original_entities and ent not in original_words and ent not in ENTITY_WHITELIST:
+                new_entities.append(ent)
         if new_entities:
             continue
             

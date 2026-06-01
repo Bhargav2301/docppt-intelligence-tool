@@ -78,7 +78,7 @@ def test_gemini(request: Request):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to decrypt Gemini API Key: {str(e)}")
         
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     payload = {
         "contents": [{
             "parts": [{"text": "Hello, respond with exact word 'Connected'."}]

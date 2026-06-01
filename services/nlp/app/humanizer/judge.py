@@ -122,6 +122,12 @@ def judge_candidates(
             # Reject if similarity is too low (high risk of semantic drift/hallucination)
             continue
             
+        # 8. Truncation guard: Reject candidates that are shorter than 40% of original, unless original is very short
+        orig_len = len(original_text.strip())
+        cand_len = len(text.strip())
+        if orig_len > 10 and cand_len < 0.4 * orig_len:
+            continue
+            
         # Helper score: favor candidates with negative likeness delta (more human)
         likeness_delta = cand.get("estimated_ai_likeness_delta", 0.0)
         
@@ -130,7 +136,11 @@ def judge_candidates(
         len_ratio = len(text) / max(len(original_text), 1)
         length_penalty = abs(1.0 - len_ratio) * 0.1
         
-        score = 1.0 - likeness_delta - length_penalty
+        # Penalize effectively unchanged outputs so actual humanizations are preferred
+        is_unchanged = cand.get("unchanged") is True or similarity > 0.97
+        unchanged_penalty = 1.5 if is_unchanged else 0.0
+        
+        score = 1.0 - likeness_delta - length_penalty - unchanged_penalty
         
         scored_candidates.append({
             "candidate": cand,

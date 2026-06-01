@@ -30,6 +30,7 @@ import {
   TonePreset,
   RewriteIntensity,
   PptSegmentV2,
+  SettingsAPI,
 } from "@/lib/api";
 import AiLikenessBadge from "@/components/AiLikenessBadge";
 import SafetyLabelBadge from "@/components/SafetyLabelBadge";
@@ -83,6 +84,19 @@ export default function PPTReview({
 
   useEffect(() => {
     refreshSessionData(true);
+    // Fetch default preferences on mount to initialize rewriteTone and rewriteIntensity
+    SettingsAPI.get()
+      .then((data) => {
+        if (data.default_tone_preset) {
+          setRewriteTone(data.default_tone_preset as TonePreset);
+        }
+        if (data.default_intensity) {
+          setRewriteIntensity(data.default_intensity as RewriteIntensity);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load settings defaults:", err);
+      });
   }, [id]);
 
   const refreshSessionData = async (setInitialSlide = false) => {
@@ -357,9 +371,13 @@ export default function PPTReview({
     (a, b) => Number(a) - Number(b)
   );
 
-  const acceptedPercentage = totalSegments > 0 ? (acceptedEditedCount / totalSegments) * 100 : 0;
-  const rejectedPercentage = totalSegments > 0 ? (rejectedCount / totalSegments) * 100 : 0;
-  const reviewedPercentage = totalSegments > 0 ? Math.round((reviewedCount / totalSegments) * 100) : 0;
+  const flaggedSegmentsTotal = allSegments.filter((s) => s.flags && s.flags.length > 0).length;
+  const flaggedSegmentsResolved = allSegments.filter(
+    (s) => s.flags && s.flags.length > 0 && s.localDecision !== "pending"
+  ).length;
+  const userProgressPercentage = flaggedSegmentsTotal > 0
+    ? Math.round((flaggedSegmentsResolved / flaggedSegmentsTotal) * 100)
+    : 100;
 
   return (
     <div className="max-w-7xl mx-auto h-[calc(100vh-8rem)] flex flex-col space-y-4">
@@ -381,17 +399,22 @@ export default function PPTReview({
         </div>
 
         {/* Progress Bar & Buttons */}
-        <div className="flex flex-wrap items-center gap-4">
-          {/* Progress bar across all slides */}
+        <div className="flex flex-wrap items-center gap-6">
+          {/* User Review Progress */}
           <div className="flex flex-col gap-1 w-44 sm:w-52">
             <div className="flex justify-between text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">
-              <span>{reviewedPercentage}% reviewed</span>
-              <span>{reviewedCount}/{totalSegments}</span>
+              <span>{userProgressPercentage}% resolved</span>
+              <span>{flaggedSegmentsResolved}/{flaggedSegmentsTotal} flags</span>
             </div>
-            <div className="h-2 w-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-full overflow-hidden flex">
-              <div style={{ width: `${acceptedPercentage}%` }} className="bg-teal-500 h-full transition-all" />
-              <div style={{ width: `${rejectedPercentage}%` }} className="bg-red-500/40 h-full transition-all" />
+            <div className="h-2 w-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-full overflow-hidden">
+              <div style={{ width: `${userProgressPercentage}%` }} className="bg-teal-500 h-full transition-all" />
             </div>
+          </div>
+
+          {/* AI Coverage */}
+          <div className="flex flex-col gap-0.5 bg-[var(--bg-elevated)]/30 border border-[var(--border-subtle)] rounded-lg px-3 py-1 text-xs text-[var(--text-secondary)] font-medium shadow-sm">
+            <span className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider block">AI Coverage</span>
+            <span>100% parsed ({totalSegments} segments)</span>
           </div>
 
           <button
@@ -790,10 +813,11 @@ function SegmentCard({
                 <button
                   onClick={onStartEdit}
                   disabled={isRerunning}
-                  className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] rounded-md transition-colors"
-                  title="Edit rewrite option"
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] rounded-md border border-[var(--border-subtle)] transition-colors"
+                  title="Edit rewrite manually"
                 >
-                  <Edit2 className="w-4 h-4" />
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>Edit Manually</span>
                 </button>
               )}
 
@@ -844,8 +868,17 @@ function SegmentCard({
           <div className="mt-2 space-y-2.5 pt-2 border-t border-[var(--border-subtle)]/50">
             {seg.flags.map((flag, idx) => (
               <div key={idx} className="border-l-2 border-[var(--accent)]/40 pl-3 py-0.5 space-y-1">
-                <div className="font-bold text-[var(--text-primary)] uppercase text-[10px] tracking-wider">
-                  {flag.type.replace(/_/g, " ")}
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <div className="font-bold text-[var(--text-primary)] uppercase text-[10px] tracking-wider">
+                    {flag.type.replace(/_/g, " ")}
+                  </div>
+                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase border ${
+                    flag.severity === 'high' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                    flag.severity === 'medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                    'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                  }`}>
+                    {flag.severity || 'medium'} confidence
+                  </span>
                 </div>
                 {flag.explanation && (
                   <p className="text-[var(--text-secondary)]">{flag.explanation}</p>
@@ -991,6 +1024,7 @@ function diffWords(original: string, modified: string): DiffToken[] {
 function renderOriginalDiff(original: string, modified: string, flags: any[]) {
   const diffs = diffWords(original, modified);
   const flaggedSpans = flags
+    .filter(f => ['generic_business_phrase', 'vague_modifier', 'robotic_transition'].includes(f.type))
     .map(f => (f.span || f.matched_text || '').toLowerCase().trim())
     .filter(s => s.length > 2);
     

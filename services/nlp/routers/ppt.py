@@ -247,9 +247,23 @@ async def process_single_ppt_internal(
                         found_any_specific = True
                         
                     # Highlight vague modifiers
+                    IMPERATIVE_VERB_EXCLUSIONS = {
+                        "run", "build", "deploy", "track", "manage", "connect", "see",
+                        "start", "stop", "scale", "automate", "measure", "visit", "speak",
+                        "explore", "ask", "understand", "decide", "plan", "review", "check"
+                    }
+                    sentences = [s.strip() for s in re.split(r'[.!?]', norm) if s.strip()]
+                    imperatives = set()
+                    for sent in sentences:
+                        s_words = sent.lower().split()
+                        if s_words and s_words[0] in IMPERATIVE_VERB_EXCLUSIONS:
+                            imperatives.add(s_words[0])
+
                     found_vague = [w for w in re.findall(r'\b[a-zA-Z]+\b', norm.lower()) if w in VAGUE_MODIFIERS]
                     seen_vague = set()
                     for vm in found_vague:
+                        if vm.lower() in imperatives:
+                            continue
                         if vm not in seen_vague:
                             seen_vague.add(vm)
                             orig_match = re.search(rf'\b{re.escape(vm)}\b', norm, re.IGNORECASE)
@@ -328,7 +342,9 @@ async def process_single_ppt_internal(
                 flags = seg.get("flags", [])
                 original = seg.get("original_text", "")
                 
-                if not flags or not original.strip():
+                is_template_only = flags and len(flags) == 1 and flags[0].get("type") == "template_similarity_risk"
+                
+                if not flags or not original.strip() or is_template_only:
                     seg["final_text"] = apply_all_editorial_rules(original)
                     seg["decision"] = "no_change"
                     continue

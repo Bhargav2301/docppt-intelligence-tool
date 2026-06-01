@@ -93,6 +93,17 @@ export default function PPTHumanizer() {
 
     setErrorMessage("");
     setBatchResult(null);
+
+    // Persist settings preferences to user settings profile
+    try {
+      await SettingsAPI.update({
+        default_tone_preset: tonePreset,
+        default_intensity: intensity,
+      });
+    } catch (err) {
+      console.error("Failed to save default settings:", err);
+    }
+
     const formData = new FormData();
     formData.append("tone_preset", tonePreset);
     formData.append("intensity", intensity);

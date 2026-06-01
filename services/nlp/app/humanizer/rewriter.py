@@ -201,38 +201,54 @@ def _generate_llm_candidates(
     """Calls Gemini API directly using urllib to avoid heavy external dependencies."""
     tone_desc = TONE_PRESETS.get(tone, TONE_PRESETS["consulting_professional"])
     
-    intensity_instruction = ""
-    if intensity == "strong":
-        intensity_instruction = (
-            "CRITICAL: Aggressively compress the text. Remove all sloganized contrasts (e.g. 'not just X, but Y', 'scale — not run', 'add — not a clerk'), "
-            "generic certainty, abstract absolutes, rhythm-heavy triads (e.g. three parallel phrases or sentences), and unsupported outcome claims. "
-            "Rewrite them into factual, specific, high-density, professional business/consultant statements. "
-            "Remove all marketing/hype language and replace it with direct, concrete descriptions."
+    intensity_rules = {
+        "strong": (
+            "Transform aggressively. You MUST change the sentence structure, replace every generic phrase, "
+            "and compress vague claims into specific ones. If the original uses 'scale', replace with the actual "
+            "capability it describes. If it uses 'not just X but Y', rewrite as a single declarative. "
+            "The output MUST read differently from the original — a word-for-word match is a failure."
+        ),
+        "balanced": (
+            "Edit meaningfully. Replace buzzwords and vague modifiers with specific alternatives. "
+            "Adjust sentence rhythm. Preserve the core meaning but change enough that the text reads as "
+            "a human draft, not a polished AI output."
+        ),
+        "minimal": (
+            "Make only the minimum changes needed to remove mechanical artifacts and AI framing. "
+            "Preserve the original structure and voice as closely as possible."
         )
-    elif intensity == "minimal":
-        intensity_instruction = (
-            "Keep edits minimal. Only correct clear AI-authored artifacts or grammar issues. Preserve the original structure and meaning."
-        )
-    else:  # balanced
-        intensity_instruction = (
-            "Improve readability and rhythm. Moderate compression. Reduce generic business phrasing and overly polished AI-like patterns."
-        )
-    
+    }
+
+    identity_guard = (
+        "CRITICAL: If you cannot meaningfully improve the text given these constraints, return the original "
+        "text unchanged in the 'text' field and set 'unchanged': true in the JSON object. "
+        "Do NOT return a subtly altered version that adds or removes only punctuation — that is worse than unchanged. "
+        "Do NOT truncate or cut the sentence. Return the FULL rewritten text."
+    )
+
+    skip_guard = (
+        "DO NOT REWRITE if the text is any of the following: a URL, an email address, a phone number, "
+        "a standalone percentage or metric (e.g. '99.9%', '280 businesses'), a brand name, "
+        "slide metadata, or an internal instruction to the team. For these, return the original unchanged."
+    )
+
     prompt = (
-        f"You are an expert presentation editor. Rewrite the following slide text.\n"
-        f"Original text: {text}\n"
-        f"Slide role: {slide_role}\n"
-        f"Tone style: {tone_desc}\n"
-        f"Constraint: Keep each option under {max_chars} characters.\n"
-        f"{intensity_instruction}\n\n"
-        f"Provide exactly 3 distinct rewrite options from minor touch-up to full restructure.\n"
-        f"Do not include markdown headers, code blocks, or preamble in your final response. "
-        f"Respond strictly with a valid JSON array of objects. Each object must have keys: 'text' (the rewritten option) and 'notes' (short description of the change).\n"
-        f"Example:\n"
-        f"[\n"
-        f"  {{\"text\": \"Polished text version 1\", \"notes\": \"Minor edit for flow\"}},\n"
-        f"  {{\"text\": \"Punchy text version 2\", \"notes\": \"Compressed bullet layout\"}}\n"
-        f"]"
+        f"You are a senior B2B sales copywriter specializing in ERP and SaaS product decks for Indian MSMEs. "
+        f"Your job is to humanize AI-generated slide text while preserving factual accuracy.\n\n"
+        f"SLIDE ROLE: {slide_role}\n"
+        f"TONE: {tone_desc}\n"
+        f"MAX CHARACTERS: {max_chars}\n"
+        f"INTENSITY: {intensity}\n\n"
+        f"INTENSITY INSTRUCTION:\n{intensity_rules.get(intensity, intensity_rules['balanced'])}\n\n"
+        f"{skip_guard}\n\n"
+        f"{identity_guard}\n\n"
+        f"ORIGINAL TEXT:\n\"\"\"\n{text}\n\"\"\"\n\n"
+        f"Return a JSON array of exactly 3 distinct rewrites. Each item must be a JSON object with keys:\n"
+        f"  - 'text': the rewritten string (full, not truncated)\n"
+        f"  - 'notes': one sentence explaining what you changed and why\n"
+        f"  - 'unchanged': true/false\n"
+        f"  - 'change_type': one of ['structural', 'lexical', 'compression', 'unchanged']\n\n"
+        f"No markdown blocks, no ```json formatting, no preamble. Return strictly a raw JSON array of objects."
     )
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"

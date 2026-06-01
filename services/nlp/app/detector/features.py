@@ -295,7 +295,24 @@ def compute_specificity_score(text: str) -> float:
     if total == 0:
         return 0.0
 
-    vague_count = sum(1 for w in words if w in VAGUE_MODIFIERS)
+    IMPERATIVE_VERB_EXCLUSIONS = {
+        "run", "build", "deploy", "track", "manage", "connect", "see",
+        "start", "stop", "scale", "automate", "measure", "visit", "speak",
+        "explore", "ask", "understand", "decide", "plan", "review", "check"
+    }
+    
+    sentences = [s.strip() for s in re.split(r'[.!?]', text) if s.strip()]
+    imperatives = set()
+    for sent in sentences:
+        s_words = sent.lower().split()
+        if s_words and s_words[0] in IMPERATIVE_VERB_EXCLUSIONS:
+            imperatives.add(s_words[0])
+
+    vague_count = 0
+    for w in words:
+        if w in VAGUE_MODIFIERS and w not in imperatives:
+            vague_count += 1
+
     vague_ratio = vague_count / total
 
     # Check for concreteness indicators (numbers, proper nouns heuristic).

@@ -20,6 +20,14 @@ def extract_ppt_text(file_source) -> Dict[str, Any]:
 
     for slide_idx, slide in enumerate(prs.slides):
         segments = []
+        is_internal = False
+        for shape in slide.shapes:
+            if hasattr(shape, "text") and shape.text:
+                txt_lower = shape.text.lower()
+                if any(phrase in txt_lower for phrase in ["notes for the", "internal note", "internal checklist", "pre-flight checklist", "template instructions", "banned words"]):
+                    is_internal = True
+                    break
+
         for shape in slide.shapes:
             if not hasattr(shape, "text_frame") or not shape.text_frame:
                 continue
@@ -28,15 +36,18 @@ def extract_ppt_text(file_source) -> Dict[str, Any]:
                 for run_idx, run in enumerate(paragraph.runs):
                     text = run.text.strip()
                     if text:
-                        shape_name = str(getattr(shape, "name", "")).lower()
-                        if "title" in shape_name or "header" in shape_name:
-                            role = "title"
-                        elif "note" in shape_name or "speaker" in shape_name:
-                            role = "speaker_note"
-                        elif getattr(paragraph, "level", 0) > 0 or len(text.split()) < 15:
-                            role = "bullet"
+                        if is_internal:
+                            role = "internal_note"
                         else:
-                            role = "body"
+                            shape_name = str(getattr(shape, "name", "")).lower()
+                            if "title" in shape_name or "header" in shape_name:
+                                role = "title"
+                            elif "note" in shape_name or "speaker" in shape_name:
+                                role = "speaker_note"
+                            elif getattr(paragraph, "level", 0) > 0 or len(text.split()) < 15:
+                                role = "bullet"
+                            else:
+                                role = "body"
                             
                         segments.append({
                             "shape_id": str(shape.shape_id),

@@ -55,10 +55,26 @@ def plan_rewrite_strategy(
         else:
             action = "light_edit" if ai_likeness_band != "low" else "pass_through"
 
+    # NEW: If the segment is flagged with any artifact, never fully pass_through in strong mode.
+    if intensity == "strong" and action == "pass_through" and has_artifacts:
+        action = "light_edit"
+
+    # NEW: For slide roles that are NOT title/bullet (body copy, callouts), in strong mode,
+    # a moderate band should always trigger full_rewrite, not light_edit
+    if intensity == "strong" and slide_role in ("body", "callout") and ai_likeness_band == "moderate":
+        action = "full_rewrite"
+
+    # NEW: Protect internal/notes slides from rewrites entirely.
+    if slide_role == "internal_note":
+        action = "pass_through"
+
     # 2. Build strategies
     strategies = []
-    if has_artifacts:
-        strategies.append("remove_mechanical_artifacts")
+    if slide_role == "internal_note":
+        strategies = []
+    else:
+        if has_artifacts:
+            strategies.append("remove_mechanical_artifacts")
         
     if action == "light_edit":
         strategies.append("apply_editorial_normalization")

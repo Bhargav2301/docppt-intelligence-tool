@@ -174,6 +174,59 @@ def get_session(session_id: uuid.UUID, db: DBSession = Depends(get_db), current_
         raise HTTPException(status_code=404, detail="Session not found")
     return db_session
 
+@router.delete("/delete-all")
+def delete_all_sessions(db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Deletes all sessions (and their associated physical files + database records) for the current user."""
+    # Find all sessions for current user
+    sessions = db.query(Session).filter(Session.user_id == current_user.id).all()
+    
+    # Import related models locally
+    from models import File as DbFile, PptOutput, PptSegment, DocOutput, ModelRun
+    import os
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    ppt_upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "ppt")
+    
+    try:
+        for s in sessions:
+            # 1. Delete physical files from disk
+            files = db.query(DbFile).filter(DbFile.session_id == s.id).all()
+            for f in files:
+                if f.storage_path and os.path.exists(f.storage_path):
+                    try:
+                        os.remove(f.storage_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete file {f.storage_path}: {e}")
+            
+            session_pptx = os.path.join(ppt_upload_dir, f"{s.id}.pptx")
+            if os.path.exists(session_pptx):
+                try:
+                    os.remove(session_pptx)
+                except Exception as e:
+                    logger.warning(f"Failed to delete session presentation {session_pptx}: {e}")
+                    
+            # 2. Delete related records in dependency order
+            ppt_outputs = db.query(PptOutput).filter(PptOutput.session_id == s.id).all()
+            for po in ppt_outputs:
+                db.query(PptSegment).filter(PptSegment.ppt_output_id == po.id).delete()
+            db.query(PptOutput).filter(PptOutput.session_id == s.id).delete()
+            
+            db.query(DocOutput).filter(DocOutput.session_id == s.id).delete()
+            db.query(DbFile).filter(DbFile.session_id == s.id).delete()
+            db.query(ModelRun).filter(ModelRun.session_id == s.id).delete()
+            
+            # Finally delete the session itself
+            db.delete(s)
+            
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"Error deleting all sessions for user {current_user.id}: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to delete all sessions: {str(exc)}")
+        
+    return {"detail": "All sessions deleted"}
+
 @router.delete("/{session_id}")
 def delete_session(session_id: uuid.UUID, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_session = db.query(Session).filter(Session.id == session_id, Session.user_id == current_user.id).first()
@@ -183,41 +236,48 @@ def delete_session(session_id: uuid.UUID, db: DBSession = Depends(get_db), curre
     # Import related models locally
     from models import File as DbFile, PptOutput, PptSegment, DocOutput, ModelRun
     import os
+    import logging
+    logger = logging.getLogger(__name__)
 
-    # 1. Delete physical files from disk
-    files = db.query(DbFile).filter(DbFile.session_id == session_id).all()
-    for f in files:
-        if f.storage_path and os.path.exists(f.storage_path):
+    try:
+        # 1. Delete physical files from disk
+        files = db.query(DbFile).filter(DbFile.session_id == session_id).all()
+        for f in files:
+            if f.storage_path and os.path.exists(f.storage_path):
+                try:
+                    os.remove(f.storage_path)
+                except Exception as e:
+                    logger.warning(f"Failed to delete file {f.storage_path}: {e}")
+
+        # Also delete any ppt file in uploads/ppt
+        ppt_upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "ppt")
+        session_pptx = os.path.join(ppt_upload_dir, f"{session_id}.pptx")
+        if os.path.exists(session_pptx):
             try:
-                os.remove(f.storage_path)
-            except Exception:
-                pass
+                os.remove(session_pptx)
+            except Exception as e:
+                logger.warning(f"Failed to delete session presentation {session_pptx}: {e}")
 
-    # Also delete any ppt file in uploads/ppt
-    ppt_upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "ppt")
-    session_pptx = os.path.join(ppt_upload_dir, f"{session_id}.pptx")
-    if os.path.exists(session_pptx):
-        try:
-            os.remove(session_pptx)
-        except Exception:
-            pass
+        # 2. Delete related records explicitly in dependency order
+        # Delete PptSegments and PptOutputs
+        ppt_outputs = db.query(PptOutput).filter(PptOutput.session_id == session_id).all()
+        for po in ppt_outputs:
+            db.query(PptSegment).filter(PptSegment.ppt_output_id == po.id).delete()
+        db.query(PptOutput).filter(PptOutput.session_id == session_id).delete()
 
-    # 2. Delete related records explicitly in dependency order
-    # Delete PptSegments and PptOutputs
-    ppt_outputs = db.query(PptOutput).filter(PptOutput.session_id == session_id).all()
-    for po in ppt_outputs:
-        db.query(PptSegment).filter(PptSegment.ppt_output_id == po.id).delete()
-    db.query(PptOutput).filter(PptOutput.session_id == session_id).delete()
+        # Delete DocOutputs
+        db.query(DocOutput).filter(DocOutput.session_id == session_id).delete()
 
-    # Delete DocOutputs
-    db.query(DocOutput).filter(DocOutput.session_id == session_id).delete()
+        # Delete Files and ModelRuns
+        db.query(DbFile).filter(DbFile.session_id == session_id).delete()
+        db.query(ModelRun).filter(ModelRun.session_id == session_id).delete()
 
-    # Delete Files and ModelRuns
-    db.query(DbFile).filter(DbFile.session_id == session_id).delete()
-    db.query(ModelRun).filter(ModelRun.session_id == session_id).delete()
-
-    # 3. Finally delete the session itself
-    db.delete(db_session)
-    db.commit()
+        # 3. Finally delete the session itself
+        db.delete(db_session)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"Error deleting session {session_id}: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to delete session: {str(exc)}")
     
     return {"detail": "Session deleted"}

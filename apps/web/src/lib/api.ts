@@ -264,6 +264,11 @@ export const SessionAPI = {
       method: "DELETE",
     });
   },
+  async deleteAll(): Promise<void> {
+    return apiFetch<void>("/api/sessions/delete-all", {
+      method: "DELETE",
+    });
+  },
 };
 
 

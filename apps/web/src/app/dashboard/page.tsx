@@ -80,9 +80,38 @@ export default function Dashboard() {
             <History className="w-5 h-5 text-[var(--text-secondary)]" />
             <h2 className="font-semibold">Recent PPT Sessions</h2>
           </div>
-          <button onClick={fetchSessions} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]" title="Refresh">
-            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-[var(--accent)]" : ""}`} />
-          </button>
+          <div className="flex items-center gap-3">
+            {sessions.length > 0 && (
+              <button
+                onClick={async () => {
+                  if (
+                    confirm(
+                      "Are you sure you want to delete ALL sessions? This will permanently delete all uploaded presentations, raw texts, and generated humanization rewrites. This action cannot be undone."
+                    )
+                  ) {
+                    try {
+                      setIsLoading(true);
+                      await SessionAPI.deleteAll();
+                      setSessions([]);
+                    } catch (e) {
+                      console.error(e);
+                      alert("Failed to delete all sessions");
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[var(--danger)] hover:bg-[var(--danger)]/10 border border-[var(--danger)]/20 hover:border-[var(--danger)]/40 transition-all"
+                title="Delete All Sessions"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete All</span>
+              </button>
+            )}
+            <button onClick={fetchSessions} className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] rounded-md transition-colors" title="Refresh">
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-[var(--accent)]" : ""}`} />
+            </button>
+          </div>
         </div>
         
         <div className="p-0">

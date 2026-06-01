@@ -20,7 +20,7 @@ from .features import (
 from .schemas import AILikenessResult, FeatureValues
 
 
-def compute_ai_likeness(text: str) -> AILikenessResult:
+def compute_ai_likeness(text: str, intensity: str = "balanced") -> AILikenessResult:
     """Compute the AI-likeness score for *text*.
 
     Steps:
@@ -32,6 +32,7 @@ def compute_ai_likeness(text: str) -> AILikenessResult:
 
     Args:
         text: The input text to evaluate.
+        intensity: The rewrite intensity context (minimal / balanced / strong).
 
     Returns:
         An :class:`AILikenessResult` containing score, band, reasons,
@@ -71,22 +72,50 @@ def compute_ai_likeness(text: str) -> AILikenessResult:
     # 3. Short-text dampening
     # ------------------------------------------------------------------
     word_count = len(text.split())
-    if word_count < 8:
-        # Short titles / headings: never classify as "high"
-        score = min(score, 0.33)
-    elif word_count < 20:
-        # Brief text: reduce score to avoid false positives
-        score = score * 0.7
+    if intensity == "strong":
+        # Under strong intensity, we want to flag AI promotional copy even in headings/bullet points
+        if word_count < 5:
+            score = min(score, 0.5)
+        # No other dampening or much higher limits!
+    elif intensity == "minimal":
+        if word_count < 12:
+            score = min(score, 0.2)
+        elif word_count < 25:
+            score = score * 0.5
+    else:  # balanced
+        if word_count < 8:
+            # Short titles / headings: never classify as "high"
+            score = min(score, 0.33)
+        elif word_count < 20:
+            # Brief text: reduce score to avoid false positives
+            score = score * 0.7
 
     # ------------------------------------------------------------------
     # 4. Band assignment
     # ------------------------------------------------------------------
-    if score <= 0.33:
-        band = "low"
-    elif score <= 0.66:
-        band = "moderate"
-    else:
-        band = "high"
+    if intensity == "strong":
+        # Lower thresholds so more things get flagged under "strong"
+        if score <= 0.15:
+            band = "low"
+        elif score <= 0.40:
+            band = "moderate"
+        else:
+            band = "high"
+    elif intensity == "minimal":
+        # Higher thresholds so fewer things get flagged under "minimal"
+        if score <= 0.45:
+            band = "low"
+        elif score <= 0.75:
+            band = "moderate"
+        else:
+            band = "high"
+    else:  # balanced / default
+        if score <= 0.33:
+            band = "low"
+        elif score <= 0.66:
+            band = "moderate"
+        else:
+            band = "high"
 
     # ------------------------------------------------------------------
     # 5. Reasons

@@ -15,11 +15,11 @@ from .editorial_rules import apply_all_editorial_rules, BRITISH_TO_AMERICAN
 logger = logging.getLogger(__name__)
 
 TONE_PRESETS: Dict[str, str] = {
-    "presentation_concise": "short, punchy, audience-first bullet format",
-    "executive_polished": "crisp, outcome-led, minimal ornamentation, professional",
-    "founder_clear": "energetic, direct, product-focused, modern",
-    "product_manager_direct": "feature-impact clarity, user-centric, data-oriented",
-    "consulting_professional": "structured, precise, formal, polished",
+    "presentation_concise": "Highly concise, punchy, bulleted presentation format. Focus on key metrics and action points. Strip filler words and narrative prose.",
+    "executive_polished": "Executive-level communication: polished, outcome-driven, highlighting high-level strategic and financial results. Avoid operational weeds or excessive jargon.",
+    "founder_clear": "Founder tone: clear, modern, passionate but direct. Focused on the vision, product value proposition, and user benefit. Avoid legacy corporate jargon.",
+    "product_manager_direct": "Product Manager style: direct, feature-impact oriented, data-driven, and highly user-centric. Connect features to specific user value.",
+    "consulting_professional": "Consulting style: structured, precise, objective, operational, formal. Focus on business processes, control points, data consistency, and professional business metrics.",
 }
 
 def generate_candidates(
@@ -29,7 +29,8 @@ def generate_candidates(
     gemini_api_key: Optional[str] = None,
     model_mode: str = "local_cpu",
     model_name: Optional[str] = None,
-    endpoint: Optional[str] = None
+    endpoint: Optional[str] = None,
+    intensity: str = "balanced"
 ) -> List[Dict[str, Any]]:
     """
     Generates a list of candidate rewrites based on the plan and tone.
@@ -63,7 +64,7 @@ def generate_candidates(
     
     # 1. Attempt Gemini BYOK rewrite if API key is provided or model_mode is gemini_byok
     if gemini_api_key or model_mode == "gemini_byok":
-        llm_candidates = _generate_llm_candidates(text, tone_preset, slide_role, max_chars, gemini_api_key or "")
+        llm_candidates = _generate_llm_candidates(text, tone_preset, slide_role, max_chars, gemini_api_key or "", intensity=intensity)
         if llm_candidates:
             for cand in llm_candidates:
                 cand_text = apply_all_editorial_rules(cand.get("text", ""))
@@ -75,7 +76,7 @@ def generate_candidates(
                     })
     # 2. Attempt other LLM candidate generation modes (managed_endpoint, user_hosted_endpoint, local CPU/GPU)
     else:
-        llm_candidates = _generate_other_llm_candidates(text, tone_preset, slide_role, max_chars, model_mode, model_name, endpoint)
+        llm_candidates = _generate_other_llm_candidates(text, tone_preset, slide_role, max_chars, model_mode, model_name, endpoint, intensity=intensity)
         if llm_candidates:
             for cand in llm_candidates:
                 cand_text = apply_all_editorial_rules(cand.get("text", ""))
@@ -117,11 +118,29 @@ def _generate_other_llm_candidates(
     max_chars: int,
     model_mode: str,
     model_name: Optional[str],
-    endpoint: Optional[str]
+    endpoint: Optional[str],
+    intensity: str = "balanced"
 ) -> Optional[List[Dict[str, Any]]]:
     """Generates rewrite candidates using non-Gemini instruction models or endpoints."""
     from runtime.registry import registry
     tone_desc = TONE_PRESETS.get(tone, TONE_PRESETS["consulting_professional"])
+    
+    intensity_instruction = ""
+    if intensity == "strong":
+        intensity_instruction = (
+            "CRITICAL: Aggressively compress the text. Remove all sloganized contrasts (e.g. 'not just X, but Y'), "
+            "generic certainty, abstract absolutes, rhythm-heavy triads (e.g. three parallel phrases or sentences), and unsupported outcome claims. "
+            "Rewrite them into factual, specific, high-density, professional business/consultant statements. "
+            "Remove all marketing/hype language and replace it with direct, concrete descriptions."
+        )
+    elif intensity == "minimal":
+        intensity_instruction = (
+            "Keep edits minimal. Only correct clear AI-authored artifacts or grammar issues. Preserve the original structure and meaning."
+        )
+    else:  # balanced
+        intensity_instruction = (
+            "Improve readability and rhythm. Moderate compression. Reduce generic business phrasing and overly polished AI-like patterns."
+        )
     
     prompt = (
         f"You are an expert presentation editor. Rewrite the following slide text.\n"
@@ -129,6 +148,7 @@ def _generate_other_llm_candidates(
         f"Slide role: {slide_role}\n"
         f"Tone style: {tone_desc}\n"
         f"Constraint: Keep it under {max_chars} characters.\n"
+        f"{intensity_instruction}\n"
         f"Make it sound natural, specific, and presentation-ready in American English.\n"
         f"Avoid generic business phrases and emojis. Respond with the rewritten text only."
     )
@@ -175,17 +195,36 @@ def _generate_llm_candidates(
     tone: str,
     slide_role: str,
     max_chars: int,
-    api_key: str
+    api_key: str,
+    intensity: str = "balanced"
 ) -> Optional[List[Dict[str, Any]]]:
     """Calls Gemini API directly using urllib to avoid heavy external dependencies."""
     tone_desc = TONE_PRESETS.get(tone, TONE_PRESETS["consulting_professional"])
+    
+    intensity_instruction = ""
+    if intensity == "strong":
+        intensity_instruction = (
+            "CRITICAL: Aggressively compress the text. Remove all sloganized contrasts (e.g. 'not just X, but Y', 'scale — not run', 'add — not a clerk'), "
+            "generic certainty, abstract absolutes, rhythm-heavy triads (e.g. three parallel phrases or sentences), and unsupported outcome claims. "
+            "Rewrite them into factual, specific, high-density, professional business/consultant statements. "
+            "Remove all marketing/hype language and replace it with direct, concrete descriptions."
+        )
+    elif intensity == "minimal":
+        intensity_instruction = (
+            "Keep edits minimal. Only correct clear AI-authored artifacts or grammar issues. Preserve the original structure and meaning."
+        )
+    else:  # balanced
+        intensity_instruction = (
+            "Improve readability and rhythm. Moderate compression. Reduce generic business phrasing and overly polished AI-like patterns."
+        )
     
     prompt = (
         f"You are an expert presentation editor. Rewrite the following slide text.\n"
         f"Original text: {text}\n"
         f"Slide role: {slide_role}\n"
         f"Tone style: {tone_desc}\n"
-        f"Constraint: Keep each option under {max_chars} characters.\n\n"
+        f"Constraint: Keep each option under {max_chars} characters.\n"
+        f"{intensity_instruction}\n\n"
         f"Provide exactly 3 distinct rewrite options from minor touch-up to full restructure.\n"
         f"Do not include markdown headers, code blocks, or preamble in your final response. "
         f"Respond strictly with a valid JSON array of objects. Each object must have keys: 'text' (the rewritten option) and 'notes' (short description of the change).\n"

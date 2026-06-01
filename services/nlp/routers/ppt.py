@@ -151,6 +151,8 @@ async def process_single_ppt_internal(
     sensitivity: str,
     db: DBSession,
     current_user: User,
+    intensity: str = "balanced",
+    tone_preset: str = "presentation_concise",
     gemini_api_key: Optional[str] = None
 ) -> Dict[str, Any]:
     """
@@ -206,7 +208,10 @@ async def process_single_ppt_internal(
                 art_res = detect_rule_artifacts(norm, paragraph_context=context)
                 
                 # AI Likeness
-                ai_res = compute_ai_likeness(norm)
+                ai_res = compute_ai_likeness(norm, intensity=intensity)
+                
+                # Assign slide/shape role if possible
+                role = seg.get("role", "body")
                 
                 seg_flags = []
                 
@@ -277,7 +282,7 @@ async def process_single_ppt_internal(
                     continue
                 
                 # Conservative: only strip artifacts & enforce editorial rules
-                if sensitivity == "conservative":
+                if sensitivity == "conservative" and intensity != "strong":
                     art_flags = detect_rule_artifacts(original).artifact_flags
                     cleaned = clean_text_by_rules(original, art_flags)
                     seg["final_text"] = apply_all_editorial_rules(cleaned)
@@ -288,10 +293,11 @@ async def process_single_ppt_internal(
                 try:
                     rewritten = generate_rewrite(
                         original,
-                        tone="professional",
+                        tone=tone_preset,
                         db=db,
                         session_id=db_session.id,
-                        gemini_api_key=gemini_api_key
+                        gemini_api_key=gemini_api_key,
+                        intensity=intensity
                     )
                     
                     if not rewritten:
@@ -487,7 +493,9 @@ async def save_upload_file_tmp(upload_file: UploadFile) -> str:
 @router.post("/process")
 async def process_presentation(
     file: UploadFile = File(...),
-    sensitivity: str = Form("conservative"),
+    sensitivity: Optional[str] = Form(None),
+    intensity: Optional[str] = Form(None),
+    tone_preset: Optional[str] = Form(None),
     db: DBSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     x_gemini_api_key: Optional[str] = Header(None)
@@ -502,6 +510,16 @@ async def process_presentation(
         except Exception as e:
             logger.error(f"Failed to decrypt X-Gemini-API-Key: {e}")
 
+    # Load defaults from user settings if not specified
+    from models import UserSettings
+    user_settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.id).first()
+    if not intensity:
+        intensity = user_settings.default_intensity if user_settings else "balanced"
+    if not tone_preset:
+        tone_preset = user_settings.default_tone_preset if user_settings else "presentation_concise"
+    if not sensitivity:
+        sensitivity = user_settings.ppt_sensitivity if user_settings else "balanced"
+
     tmp_path = await save_upload_file_tmp(file)
     try:
         return await process_single_ppt_internal(
@@ -510,6 +528,8 @@ async def process_presentation(
             sensitivity=sensitivity,
             db=db,
             current_user=current_user,
+            intensity=intensity,
+            tone_preset=tone_preset,
             gemini_api_key=gemini_api_key
         )
     except Exception as e:
@@ -524,7 +544,9 @@ async def process_presentation(
 @router.post("/batch-process", response_model=List[BatchPptItemResponse])
 async def batch_process_presentation(
     files: List[UploadFile] = File(...),
-    sensitivity: str = Form("conservative"),
+    sensitivity: Optional[str] = Form(None),
+    intensity: Optional[str] = Form(None),
+    tone_preset: Optional[str] = Form(None),
     db: DBSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     x_gemini_api_key: Optional[str] = Header(None)
@@ -538,6 +560,16 @@ async def batch_process_presentation(
             gemini_api_key = decrypt_api_key(x_gemini_api_key)
         except Exception as e:
             logger.error(f"Failed to decrypt X-Gemini-API-Key: {e}")
+
+    # Load defaults from user settings if not specified
+    from models import UserSettings
+    user_settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.id).first()
+    if not intensity:
+        intensity = user_settings.default_intensity if user_settings else "balanced"
+    if not tone_preset:
+        tone_preset = user_settings.default_tone_preset if user_settings else "presentation_concise"
+    if not sensitivity:
+        sensitivity = user_settings.ppt_sensitivity if user_settings else "balanced"
 
     results = []
     
@@ -561,6 +593,8 @@ async def batch_process_presentation(
                 sensitivity=sensitivity,
                 db=db,
                 current_user=current_user,
+                intensity=intensity,
+                tone_preset=tone_preset,
                 gemini_api_key=gemini_api_key
             )
             session_id = res["session"]["id"]

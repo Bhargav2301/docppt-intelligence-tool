@@ -31,6 +31,12 @@ GENERIC_PHRASES: List[str] = [
     "competitive advantage", "industry-leading", "transformative",
     "enables seamless", "ensures compliance", "facilitates",
     "real-time visibility", "across the enterprise", "stakeholder engagement",
+    "outgrown", "scale your", "chaos", "data islands",
+    "decisions from real data", "run the business", "don't be the system",
+    "honest comparison", "failure rate", "industry average",
+    "anonymised pattern", "zero commitment", "living, interactive",
+    "unlike any", "explore your industry's", "BOM-first",
+    "classroom training", "dedicated success manager", "no data islands",
 ]
 
 VAGUE_MODIFIERS: List[str] = [
@@ -39,6 +45,7 @@ VAGUE_MODIFIERS: List[str] = [
     "various", "numerous", "optimal", "dynamic", "advanced",
     "enhanced", "improved", "strategic", "key", "critical",
     "essential", "vital", "crucial", "important", "major",
+    "scale", "run", "outgrown", "chaos",
 ]
 
 COMMON_AI_OPENERS: List[str] = [
@@ -190,15 +197,89 @@ def compute_repetition_score(text: str) -> float:
     return round(min(combined, 1.0), 4)
 
 
+AI_SLOGAN_PATTERNS: List[str] = [
+    # Sloganized contrast: "Built to scale ... — not just run it", "add a plant ... — not a clerk"
+    r"(?i)\bnot\s+just\b",
+    r"(?i)\bnot\s+only\b",
+    r"(?i)—\s*not\s+a\b",
+    r"(?i)-\s*not\s+a\b",
+    r"(?i)—\s*not\s+just\b",
+    r"(?i)-\s*not\s+just\b",
+    r"(?i)\bnot\s+on\b",
+    r"(?i)\bnot\s+in\b",
+    # Tool combinations: "Tally + Excel", "Excel + WhatsApp", "Excel + Tally"
+    r"(?i)\w+\s*\+\s*\w+",
+    # Rhythm-heavy triads: e.g. "Six modules. One platform. No data islands."
+    # We can detect this structural pattern: three short phrases separated by periods/dashes
+    r"(?i)^[^.!?]+[.!?]\s*[^.!?]+[.!?]\s*[^.!?]+[.!?]$",
+    # Repeated listing patterns like "by ..., by ..., by ..."
+    r"(?i)\bby\s+\w+(?:,\s*by\s+\w+){2,}\b",
+    r"(?i)\bby\s+\w+,\s*by\s+\w+\b",
+    # Formulaic slogans
+    r"(?i)\bbuilt\s+to\b",
+    r"(?i)\bdesigned\s+for\b",
+    r"(?i)\bscale\s+your\b",
+    r"(?i)\bscale\s+operations\b",
+    # AI certainty & promotional markers
+    r"(?i)\bunlike\s+any\b",
+    r"(?i)\bliving,\s+interactive\b",
+    r"(?i)\bzero\s+commitment\b",
+    r"(?i)\bno\s+surprises\b",
+    r"(?i)\bno\s+hidden\b",
+    r"(?i)\bcomplete\s+control\b",
+    r"(?i)\bdata\s+islands\b",
+    r"(?i)\bfree\s+digital\s+maturity\b",
+    r"(?i)\bexperience\s+[\w]+\b",
+    r"(?i)\bscale\s+without\b",
+    r"(?i)\bwithout\s+the\s+right\s+data\b",
+    r"(?i)\bgut\s*\+\s*customer\b",
+    # Narratives and presentation AI structures
+    r"(?i)\bno\s+idea\b",
+    r"(?i)\bwhat\s+you\s+actually\b",
+    r"(?i)\bnightmare\b",
+    r"(?i)\bwhat\s+we\s+keep\s+seeing\b",
+    r"(?i)\bwhat\s+the\s+owner\s+stops\b",
+    r"(?i)\bwhat\s+shifts\b",
+    r"(?i)\bwhat\s+changes\b",
+    r"(?i)\bwhy\s+most\b",
+    r"(?i)\bwhy\s+our\b",
+    r"(?i)\bwhy\s+absolin\b",
+    r"(?i)\bhonest\s+comparison\b",
+    r"(?i)\bpric(?:ed|ing)\s+for\b",
+    r"(?i)\bpricing\s+scope\b",
+    r"(?i)\bone\s+conversation\b",
+    r"(?i)\bexperience\s+absolin\b",
+    r"(?i)\bworkweek\b",
+    r"(?i)\bowner\s+freedom\b",
+    r"(?i)\bvalue\s+addition\b",
+    r"(?i)\bhow\s+it\s+all\s+connects\b",
+    r"(?i)\bwe\s+know\s+your\s+world\b",
+    r"(?i)\bfive\s+decisions\b",
+    r"(?i)\b5\s+decisions\b",
+    r"(?i)\bdecision\s+by\s+decision\b",
+    r"(?i)\bone\s+week\b",
+    r"(?i)\bbefore\s+vs\s+after\b",
+]
+
 def compute_generic_phrase_score(text: str) -> float:
-    """0-1 score based on density of generic business / AI phrases."""
+    """0-1 score based on density of generic business / AI phrases and slogan patterns."""
     text_lower = text.lower()
     words = text.split()
     total_words = len(words)
     if total_words == 0:
         return 0.0
 
-    hit_count = sum(1 for phrase in GENERIC_PHRASES if phrase in text_lower)
+    hit_count = 0
+    # Check exact phrases
+    for phrase in GENERIC_PHRASES:
+        if phrase in text_lower:
+            hit_count += 1
+            
+    # Check regex patterns
+    for pattern in AI_SLOGAN_PATTERNS:
+        if re.search(pattern, text):
+            hit_count += 1.5  # Give higher weight to structural AI slogan patterns!
+
     # Normalise: each hit "covers" roughly 2 words.
     density = (hit_count * 2) / total_words
     return round(min(density, 1.0), 4)

@@ -16,7 +16,8 @@ def generate_rewrite(
     tone: str = "professional", 
     db: Optional[DBSession] = None, 
     session_id: Optional[uuid.UUID] = None,
-    gemini_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None,
+    intensity: str = "balanced"
 ) -> Optional[str]:
     """
     Rewrites the input text using the configured instruction model.
@@ -88,7 +89,7 @@ def generate_rewrite(
         }
         mapped_tone = tone_map.get(tone.lower(), "consulting_professional")
         
-        ai_res = compute_ai_likeness(text)
+        ai_res = compute_ai_likeness(text, intensity=intensity)
         art_res = detect_artifacts(text)
         
         plan = plan_rewrite_strategy(
@@ -97,7 +98,8 @@ def generate_rewrite(
             ai_likeness_reasons=ai_res.reasons,
             artifact_flags=[f.dict() for f in art_res.artifact_flags],
             tone_preset=mapped_tone,
-            slide_role="body"
+            slide_role="body",
+            intensity=intensity
         )
         
         # Route specific model settings depending on mode
@@ -111,7 +113,8 @@ def generate_rewrite(
             gemini_api_key=gemini_api_key,
             model_mode=mode,
             model_name=actual_name,
-            endpoint=actual_endpoint
+            endpoint=actual_endpoint,
+            intensity=intensity
         )
         
         decision_dict = judge_candidates(

@@ -21,3 +21,15 @@ def test_scorer_bands():
     assert len(res_generic.reasons) >= 1
     # Check that generic reasons list exists
     assert any("generic" in r.lower() for r in res_generic.reasons) or any("modifiers" in r.lower() for r in res_generic.reasons)
+
+def test_scorer_intensity():
+    # Very short text under strong intensity should not be clamped to 0.33 limit, and should get moderate band
+    short_title = "Built to scale your manufacturing - not just run it."
+    res_strong = compute_ai_likeness(short_title, intensity="strong")
+    assert res_strong.band == "moderate"
+    assert res_strong.score > 0.15
+
+    # Short title under minimal intensity should have very low score
+    res_minimal = compute_ai_likeness(short_title, intensity="minimal")
+    assert res_minimal.band == "low"
+    assert res_minimal.score < 0.25

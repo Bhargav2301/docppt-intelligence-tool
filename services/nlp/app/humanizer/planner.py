@@ -13,7 +13,8 @@ def plan_rewrite_strategy(
     artifact_flags: List[Dict[str, Any]],
     tone_preset: str,
     slide_role: str,  # 'title', 'bullet', 'body', 'speaker_note'
-    char_limit: int = 0
+    char_limit: int = 0,
+    intensity: str = "balanced"
 ) -> Dict[str, Any]:
     """
     Generates a rewrite plan based on slide role and AI-likeness diagnosis.
@@ -24,17 +25,35 @@ def plan_rewrite_strategy(
     word_count = len(text.split())
     has_artifacts = len(artifact_flags) > 0
     
-    # 1. Determine action level
-    if ai_likeness_band == "low":
-        action = "pass_through"
-    elif ai_likeness_band == "moderate":
-        action = "light_edit"
-    else:  # High likeness
-        action = "full_rewrite"
+    # 1. Determine action level based on intensity and likeness
+    if intensity == "strong":
+        # In strong mode, even moderate likeness gets a full rewrite, and low gets a light edit if there are flags/AI patterns
+        if ai_likeness_band == "low":
+            action = "light_edit" if (has_artifacts or any(k in text.lower() for k in ["not just", "scale", "outgrown", "platform", "+", "vs"])) else "pass_through"
+        elif ai_likeness_band == "moderate":
+            action = "full_rewrite"
+        else:  # High
+            action = "full_rewrite"
+    elif intensity == "minimal":
+        # In minimal mode, only high likeness gets a light edit, moderate and low pass through
+        if ai_likeness_band == "high":
+            action = "light_edit"
+        else:
+            action = "pass_through"
+    else:  # balanced
+        if ai_likeness_band == "low":
+            action = "pass_through"
+        elif ai_likeness_band == "moderate":
+            action = "light_edit"
+        else:
+            action = "full_rewrite"
         
-    # Titles/Headings: restrict to light_edit max to avoid breaking layout/context
+    # Titles/Headings: restrict to light_edit max to avoid breaking layout/context, unless strong intensity is requested
     if slide_role == "title":
-        action = "light_edit" if ai_likeness_band != "low" else "pass_through"
+        if intensity == "strong" and ai_likeness_band != "low":
+            action = "full_rewrite"
+        else:
+            action = "light_edit" if ai_likeness_band != "low" else "pass_through"
 
     # 2. Build strategies
     strategies = []
@@ -72,6 +91,7 @@ def plan_rewrite_strategy(
             "max_chars": max_chars,
             "preserve_named_entities": True,
             "slide_role": slide_role,
-            "tone_preset": tone_preset
+            "tone_preset": tone_preset,
+            "intensity": intensity
         }
     }

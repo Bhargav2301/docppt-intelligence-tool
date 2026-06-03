@@ -125,10 +125,18 @@ except Exception as e:
 app = FastAPI(title="DocPPT PPTX AI-Likeness Detector & Humanizer", version="1.0.0")
 
 # Setup CORS origins dynamically from FRONTEND_URL or default to localhost:3000
-origins = ["http://localhost:3000", "http://localhost:5173"]
+origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://docpptinteligence.qzz.io",
+    "https://www.docpptinteligence.qzz.io",
+    "https://docppt-frontend.onrender.com"
+]
 frontend_url = os.getenv("FRONTEND_URL")
 if frontend_url:
-    origins.append(frontend_url.rstrip("/"))
+    url_stripped = frontend_url.rstrip("/")
+    if url_stripped not in origins:
+        origins.append(url_stripped)
 
 app.add_middleware(
     CORSMiddleware,
